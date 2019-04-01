@@ -1,0 +1,145 @@
+#!/bin/bash
+
+swapP="+1G"
+rootP="+10G"
+locale="en_US.UTF-8"
+hostname="arch"
+rootPasswd="secret"
+uName="user"
+
+## Bools
+intelUcode=false
+amdUcode=false
+# =========================== #
+# Nothing to be modified here #
+# =========================== #
+
+isEFI=false
+fs=""
+questionPrompt(){
+    read -p "$1 (Y/n)? " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+    return 1
+}
+askStuff(){
+    if questionPrompt "Would you like to install intel ucode?"; then
+        intelUcode=true
+    fi
+    if questionPrompt "Would you like to install amd ucode?"; then
+        amdUcode=true
+    fi
+}
+checkEFI(){
+    if [[ "$(ls -A /sys/firmware/efi/efivars/ 2>/dev/null)" ]]; then
+        isEFI=true
+    fi
+    timedatectl set-ntp true
+}
+filesys(){
+    tempFile=/tmp/counter.tmp
+    echo 0 > $tempFile
+    lsblk -T
+    echo
+
+    ls /dev/sd*[a-z] | while read i; do
+        counter=$[$(cat $tempFile) + 1]
+        echo $counter > $tempFile
+        echo "$counter)" "$i"
+    done
+    numDrives=$(cat $tempFile)
+    unlink $tempFile
+
+    while [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -gt "$numDrives" ] || [ "$choice" -le 0 ]; do
+        read -r -p "Which drive would you like to install Arch on [1-"$numDrives"]: " choice
+    done
+
+    fs=$(ls /dev/sd*[a-z] | sed -n "$choice"p)
+
+    if [ -z "$fs" ]; then
+        echo "Something went wrong!"
+        exit
+    fi
+}
+mkpart(){
+    echo n
+    echo
+    echo
+    echo "$1"
+}
+# 1=bootloader, 2=swap, 3=root, 4=home
+partition(){
+    umount "$fs"?*
+    (
+    echo g
+    if [ $isEFI ]; then
+        mkpart "+512M"
+    else
+        mkpart "+200M"
+    fi 
+    mkpart "$swapP"
+    mkpart "$rootP"
+    mkpart 
+    echo p 
+    echo w
+    ) | fdisk "$fs"
+
+    umount /mnt
+    mkfs.fat -F32 "$fs"1
+    mkswap "$fs"2
+    swapon "$fs"2
+    mkfs.ext4 -F "$fs"3
+    mkfs.ext4 -F "$fs"4
+}
+install(){
+    mount "$fs"3 /mnt
+    mkdir /mnt/home
+    mount "$fs"4 /mnt/home
+    pacstrap  /mnt reflector
+    reflector --protocol https --sort rate --save /etc/pacman.d/mirrorlist --verbose
+    pacstrap /mnt base base-devel
+    genfstab -U /mnt >> /mnt/etc/fstab
+}
+basicSetup(){
+arch-chroot /mnt /bin/env locale="$locale" hostname="$hostname" rootPasswd="$rootPasswd" /bin/bash << "EOF"
+pacman -S --noconfirm networkmanager
+systemctl enable NetworkManager
+pacman -Rns reflector --noconfirm
+timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
+ln -sf /usr/share/"$timeZ"
+hwclock --systohc
+sed -i "/^#.* "$locale" /s/^#//" /etc/locale.gen
+locale-gen
+echo "LANG="$locale"" > /etc/locale.conf
+echo "$hostname" > /etc/hostname
+echo -e "127.0.0.1\t"$hostname"\n::1\t"$hostname"\n127.0.1.1\t"$hostname".local\t"$hostname"" > /etc/hosts
+passwd
+$rootPasswd
+$rootPasswd
+EOF
+}
+userSetup(){
+arch-chroot /mnt /bin/env uName="$uName" /bin/bash << "EOF"
+useradd -m -G wheel $uName 
+echo ""$uName" ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
+EOF
+}
+grubSetup(){
+arch-chroot /mnt /bin/env fs="$fs" /bin/bash << "EOF"
+pacman -S --noconfirm grub efibootmgr
+mkdir /boot/efi
+mount "$fs"1 /boot/efi
+grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
+grub-mkconfig -o /boot/grub/grub.cfg
+umount "$fs"1 
+EOF
+}
+askStuff
+filesys
+partition
+install
+basicSetup
+userSetup
+grubSetup
