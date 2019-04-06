@@ -3,34 +3,49 @@
 swapP="+1G"
 rootP="+10G"
 locale="en_US.UTF-8"
-hostname="arch"
-rootPasswd="secret"
-uName="user"
 
-## Bools
-intelUcode=false
-amdUcode=false
 # =========================== #
 # Nothing to be modified here #
 # =========================== #
 
+uName=""
+userPass=""
+hostname=""
+pkgs="base base-devel"
+
 isEFI=false
 fs=""
-questionPrompt(){
-    read -p "$1 (Y/n)? " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        return 0
-    fi
-    return 1
+
+getConfig(){
+    uName=$(dialog --inputbox "What username would you like?" 10 40  --output-fd 1)
+    userPass=$(dialog --inputbox "What password would you like for $uName?" 10 40  --output-fd 1)
+    hostname=$(dialog --inputbox "What hostname would you like?" 10 40  --output-fd 1)
+    clear
 }
-askStuff(){
-    if questionPrompt "Would you like to install intel ucode?"; then
-        intelUcode=true
+getPkgs(){
+    pacman -Qi dialog >/dev/null 2>&1
+    if [[ $? -ne 0 ]]; then
+        echo "Installing dialog..."
+        pacman -S dialog --noconfirm >/dev/null 2>&1
     fi
-    if questionPrompt "Would you like to install amd ucode?"; then
-        amdUcode=true
-    fi
+    cmd=(dialog --separate-output --checklist "Select additional packages:" 20 40 15)
+    args=(1 "Intel Ucode" off
+          2 "AMD Ucode" off
+          3 "PulseAudio" off
+          4 "AlsaAudio" off)
+    choices=$("${cmd[@]}" "${args[@]}" 2>&1 >/dev/tty)
+    clear
+    for choice in $choices; do
+        case $choice in
+            1) addPkg intel-ucode;;
+            2) addPkg amd-ucode;;
+            3) addPkg pulseaudio;;
+            4) addPkg alsa-utils;;
+        esac
+    done
+}
+addPkg(){
+    pkgs="$pkgs $1 "
 }
 checkEFI(){
     if [[ "$(ls -A /sys/firmware/efi/efivars/ 2>/dev/null)" ]]; then
@@ -97,13 +112,13 @@ install(){
     mount "$fs"3 /mnt
     mkdir /mnt/home
     mount "$fs"4 /mnt/home
-    pacstrap  /mnt reflector
-    reflector --protocol https --sort rate --save /etc/pacman.d/mirrorlist --verbose
-    pacstrap /mnt base base-devel
+    reflector --protocol https --sort rate --save /mnt/etc/pacman.d/mirrorlist --verbose
+    pacstrap "$pkgs"
+    installPkgs
     genfstab -U /mnt >> /mnt/etc/fstab
 }
 basicSetup(){
-arch-chroot /mnt /bin/env locale="$locale" hostname="$hostname" rootPasswd="$rootPasswd" /bin/bash << "EOF"
+arch-chroot /mnt /bin/env locale="$locale" hostname="$hostname" /bin/bash << "EOF"
 pacman -S --noconfirm networkmanager
 systemctl enable NetworkManager
 pacman -Rns reflector --noconfirm
@@ -111,19 +126,17 @@ timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{pr
 ln -sf /usr/share/"$timeZ"
 hwclock --systohc
 sed -i "/^#.* "$locale" /s/^#//" /etc/locale.gen
-locale-gen
 echo "LANG="$locale"" > /etc/locale.conf
+locale-gen
 echo "$hostname" > /etc/hostname
 echo -e "127.0.0.1\t"$hostname"\n::1\t"$hostname"\n127.0.1.1\t"$hostname".local\t"$hostname"" > /etc/hosts
-passwd
-$rootPasswd
-$rootPasswd
 EOF
 }
 userSetup(){
-arch-chroot /mnt /bin/env uName="$uName" /bin/bash << "EOF"
+arch-chroot /mnt /bin/env uName="$uName" userPass="$userPass" /bin/bash << "EOF"
 useradd -m -G wheel $uName 
 echo ""$uName" ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
+echo "$uName":"$pw" | chpasswd
 EOF
 }
 grubSetup(){
@@ -136,7 +149,8 @@ grub-mkconfig -o /boot/grub/grub.cfg
 umount "$fs"1 
 EOF
 }
-askStuff
+getConfig
+getPkgs
 filesys
 partition
 install
