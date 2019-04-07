@@ -16,15 +16,30 @@ pkgs="base base-devel"
 isEFI=false
 fs=""
 
+# Get username, hostname, password
 getConfig(){
-    uName=$(dialog --inputbox "What username would you like?" 10 40  --output-fd 1)
-    userPass=$(dialog --inputbox "What password would you like for $uName?" 10 40  --output-fd 1)
-    hostname=$(dialog --inputbox "What hostname would you like?" 10 40  --output-fd 1)
+    uName=$(dialog --inputbox "What username would you like?" 8 40  --output-fd 1)
+    while true; do
+        pass1=$(dialog --passwordbox "What password would you like for $uName?" 8 40 --output-fd 1)
+        pass2=$(dialog --passwordbox "Confirm password for $uName" 8 40 --output-fd 1)
+        if [ "$pass1" == "$pass2" ]; then
+            userPass="$pass1"
+            break 2
+        else
+            dialog --infobox "Passwords do not match, try again." 3 40; sleep 2
+        fi
+    done
+    hostname=$(dialog --inputbox "What hostname would you like?" 8 40  --output-fd 1)
     clear
+    if [[ -z "$uName" || -z "$hostname" ]]; then
+        echo "Username or hostname left blank, exiting."
+        exit
+    fi
 }
+# Ask for some additional popular packages
 getPkgs(){
     pacman -Qi dialog >/dev/null 2>&1
-    if [[ $? -ne 0 ]]; then
+    if [ $? -ne 0 ]; then
         echo "Installing dialog..."
         pacman -S dialog --noconfirm >/dev/null 2>&1
     fi
@@ -32,7 +47,8 @@ getPkgs(){
     args=(1 "Intel Ucode" off
           2 "AMD Ucode" off
           3 "PulseAudio" off
-          4 "AlsaAudio" off)
+          4 "AlsaAudio" off
+          5 "NeoVim" off)
     choices=$("${cmd[@]}" "${args[@]}" 2>&1 >/dev/tty)
     clear
     for choice in $choices; do
@@ -41,11 +57,12 @@ getPkgs(){
             2) addPkg amd-ucode;;
             3) addPkg pulseaudio;;
             4) addPkg alsa-utils;;
+            5) addPkg neovim;;
         esac
     done
 }
 addPkg(){
-    pkgs="$pkgs $1 "
+    pkgs="$pkgs $1"
 }
 checkEFI(){
     if [[ "$(ls -A /sys/firmware/efi/efivars/ 2>/dev/null)" ]]; then
@@ -53,21 +70,19 @@ checkEFI(){
     fi
     timedatectl set-ntp true
 }
-filesys(){
+getFS(){
     tempFile=/tmp/counter.tmp
-    echo 0 > $tempFile
-    lsblk -T
-    echo
-
+    echo 0 > $tempFile # Temp file for storing value from loop
+    lsblk -T; echo
     ls /dev/sd*[a-z] | while read i; do
         counter=$[$(cat $tempFile) + 1]
         echo $counter > $tempFile
-        echo "$counter)" "$i"
+        echo "$counter" "$i"
     done
     numDrives=$(cat $tempFile)
     unlink $tempFile
 
-    while [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -gt "$numDrives" ] || [ "$choice" -le 0 ]; do
+    while [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -gt "$numDrives" || "$choice" -le 0 ]]; do
         read -r -p "Which drive would you like to install Arch on [1-"$numDrives"]: " choice
     done
 
@@ -85,7 +100,7 @@ mkpart(){
     echo "$1"
 }
 # 1=bootloader, 2=swap, 3=root, 4=home
-partition(){
+formatFS(){
     umount "$fs"?*
     (
     echo g
@@ -113,8 +128,7 @@ install(){
     mkdir /mnt/home
     mount "$fs"4 /mnt/home
     reflector --protocol https --sort rate --save /mnt/etc/pacman.d/mirrorlist --verbose
-    pacstrap "$pkgs"
-    installPkgs
+    pacstrap /mnt $pkgs
     genfstab -U /mnt >> /mnt/etc/fstab
 }
 basicSetup(){
@@ -151,8 +165,8 @@ EOF
 }
 getConfig
 getPkgs
-filesys
-partition
+getFS
+formatFS
 install
 basicSetup
 userSetup
