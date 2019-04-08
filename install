@@ -12,12 +12,32 @@ uName=""
 userPass=""
 hostname=""
 pkgs="base base-devel"
-
+reqs=(dialog reflector)
 isEFI=false
 fs=""
 
+system_check(){
+    wget -q --spider http://google.com
+    if [ $? -ne 0 ]; then
+        echo "No network connection found, exiting!"
+        exit
+    fi
+    if [ "$(ls -A /sys/firmware/efi/efivars/ 2>/dev/null)" ]; then
+        isEFI=true
+    fi
+}
+# Install requried packages
+install_reqs(){
+    for pkg in "${reqs[@]}"; do
+        pacman -Qi $pkg >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "Installing $pkg..."
+            pacman -S $pkg --noconfirm >/dev/null 2>&1
+        fi
+    done
+}
 # Get username, hostname, password
-getConfig(){
+get_config(){
     uName=$(dialog --inputbox "What username would you like?" 8 40  --output-fd 1)
     while true; do
         pass1=$(dialog --passwordbox "What password would you like for $uName?" 8 40 --output-fd 1)
@@ -30,19 +50,20 @@ getConfig(){
         fi
     done
     hostname=$(dialog --inputbox "What hostname would you like?" 8 40  --output-fd 1)
-    clear
     if [[ -z "$uName" || -z "$hostname" ]]; then
-        echo "Username or hostname left blank, exiting."
-        exit
+        dialog --infobox "Username or hostname left blank, try again." 3 50; sleep 2
+        getConfig
     fi
+    dialog --yesno "Username: $uName\nHostname: $hostname\nEFI enabled: $isEFI" 7 40
+
+    # Return if no confirmation 
+    if [ $? -ne 0 ]; then
+        getConfig
+    fi
+    clear
 }
 # Ask for some additional popular packages
-getPkgs(){
-    pacman -Qi dialog >/dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo "Installing dialog..."
-        pacman -S dialog --noconfirm >/dev/null 2>&1
-    fi
+get_pkgs(){
     cmd=(dialog --separate-output --checklist "Select additional packages:" 20 40 15)
     args=(1 "Intel Ucode" off
           2 "AMD Ucode" off
@@ -53,24 +74,19 @@ getPkgs(){
     clear
     for choice in $choices; do
         case $choice in
-            1) addPkg intel-ucode;;
-            2) addPkg amd-ucode;;
-            3) addPkg pulseaudio;;
-            4) addPkg alsa-utils;;
-            5) addPkg neovim;;
+            1) add_pkg intel-ucode;;
+            2) add_pkg amd-ucode;;
+            3) add_pkg pulseaudio;;
+            4) add_pkg alsa-utils;;
+            5) add_pkg neovim;;
         esac
     done
 }
-addPkg(){
+add_pkg(){
     pkgs="$pkgs $1"
 }
-checkEFI(){
-    if [[ "$(ls -A /sys/firmware/efi/efivars/ 2>/dev/null)" ]]; then
-        isEFI=true
-    fi
-    timedatectl set-ntp true
-}
-getFS(){
+# Asks which drive arch should be installed to
+get_drive(){
     tempFile=/tmp/counter.tmp
     echo 0 > $tempFile # Temp file for storing value from loop
     lsblk -T; echo
@@ -100,7 +116,7 @@ mkpart(){
     echo "$1"
 }
 # 1=bootloader, 2=swap, 3=root, 4=home
-formatFS(){
+format_fs(){
     umount "$fs"?*
     (
     echo g
@@ -123,19 +139,22 @@ formatFS(){
     mkfs.ext4 -F "$fs"3
     mkfs.ext4 -F "$fs"4
 }
-install(){
+arch_install(){
+    timedatectl set-ntp true
+
     mount "$fs"3 /mnt
     mkdir /mnt/home
     mount "$fs"4 /mnt/home
-    reflector --protocol https --sort rate --save /mnt/etc/pacman.d/mirrorlist --verbose
+    # Accuqire better mirrors
+    reflector --protocol https --sort rate --save /etc/pacman.d/mirrorlist --verbose
     pacstrap /mnt $pkgs
+    cp /etc/pacman.d/mirrorlist /mnt/etc/pacman.d/mirrorlist 
     genfstab -U /mnt >> /mnt/etc/fstab
 }
-basicSetup(){
+system_setup(){
 arch-chroot /mnt /bin/env locale="$locale" hostname="$hostname" /bin/bash << "EOF"
 pacman -S --noconfirm networkmanager
 systemctl enable NetworkManager
-pacman -Rns reflector --noconfirm
 timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
 ln -sf /usr/share/"$timeZ"
 hwclock --systohc
@@ -146,14 +165,14 @@ echo "$hostname" > /etc/hostname
 echo -e "127.0.0.1\t"$hostname"\n::1\t"$hostname"\n127.0.1.1\t"$hostname".local\t"$hostname"" > /etc/hosts
 EOF
 }
-userSetup(){
+user_setup(){
 arch-chroot /mnt /bin/env uName="$uName" userPass="$userPass" /bin/bash << "EOF"
 useradd -m -G wheel $uName 
 echo ""$uName" ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
 echo "$uName":"$pw" | chpasswd
 EOF
 }
-grubSetup(){
+grub_setup(){
 arch-chroot /mnt /bin/env fs="$fs" /bin/bash << "EOF"
 pacman -S --noconfirm grub efibootmgr
 mkdir /boot/efi
@@ -163,11 +182,13 @@ grub-mkconfig -o /boot/grub/grub.cfg
 umount "$fs"1 
 EOF
 }
-getConfig
-getPkgs
-getFS
-formatFS
-install
-basicSetup
-userSetup
-grubSetup
+system_check
+install_reqs
+get_config
+get_pkgs
+get_drive
+format_fs
+arch_install
+system_setup
+user_setup
+grub_setup
