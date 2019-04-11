@@ -9,10 +9,10 @@
 
 ## TODO
 
-+ pariton size selection
++ partiton size selection
 + keymap check
-+ copy script to /mnt instead of running all commands through chroot
-+ DE and WM installation
++ ~~copy script to /mnt instead of running all commands through chroot~~
++ DE and WM installation + xorg setup
 
 ## Not working
 
