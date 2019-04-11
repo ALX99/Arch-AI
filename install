@@ -1,4 +1,4 @@
-#'!/bin/bash
+#!/bin/bash
 
 swapP="+1G"
 rootP="+10G"
@@ -105,7 +105,7 @@ get_pkgs(){
     done
 }
 add_pkg(){
-    if [[ "$pkgs" != *$1* ]];then
+    if [[ "$pkgs" != *$1* ]]; then
         pkgs="$pkgs $1"
     fi
 }
@@ -137,11 +137,10 @@ get_drive(){
 }
 # 1=bootloader, 2=swap, 3=root, 4=home
 format_fs(){
-    if df | grep -q $fs; then
+    while df | grep -q $fs; do
         prompt "$fs seems to be mounted, trying to unmount!" red
-        umount ${fs}?*
-        format_fs
-    fi
+        ls ${fs}?* | xargs -n1 umount || true
+    done
 
     if swapon --show | grep -q $fs; then
         prompt "$fs seems to have swap partition, trying to disable it!" red
@@ -164,10 +163,14 @@ format_fs(){
 
     prompt "Formatting partitions..." yellow
     mkfs.fat -F32 ${fs}1 > /dev/null
-    mkswap ${fs}2 > /dev/null
+    mkswap ${fs}2 2>&1
     swapon ${fs}2 > /dev/null
     mkfs.ext4 -F ${fs}3 > /dev/null
     mkfs.ext4 -F ${fs}4 > /dev/null
+
+    mount ${fs}3 /mnt
+    mkdir /mnt/home
+    mount ${fs}4 /mnt/home
 }
 # sequence for creating a new partition
 mkpart(){
@@ -177,52 +180,71 @@ mkpart(){
     echo y # in case of 'already contains signature'
     echo "$1"
 }
+jumpChroot(){
+    printf "locale=\"$locale\"\nuName=\"$uName\"\nuserPass=\"$userPass\"\nhostname=\"$hostname\"\nisUEFI=\"$isUEFI\"\nfs=\"$fs\"\n" > /mnt/CHROOT
+    cp $0 /mnt/install
+    chmod 755 /mnt/install
+
+arch-chroot /mnt /bin/bash << "EOF"
+./install
+EOF
+}
 arch_install(){
     prompt "Installing Arch Linux..." yellow
     timedatectl set-ntp true
-    mount ${fs}3 /mnt
-    mkdir /mnt/home
-    mount ${fs}4 /mnt/home
-    # Accquire better mirrors
-    reflector --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-    pacstrap /mnt $pkgs > /dev/null
-    cp /etc/pacman.d/mirrorlist /mnt/etc/pacman.d/mirrorlist 
-    genfstab -U /mnt >> /mnt/etc/fstab
+    prompt "Generating pacman mirrors, this might take a while..." yellow
+    reflector --latest 200 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+    prompt "Done generating mirrors" green
+    prompt "Pacstrapping packages..." yellow
+    pacstrap /mnt $pkgs
+    genfstab -U /mnt > /mnt/etc/fstab
+    prompt "Finished installing Arch" green
 }
 system_setup(){
-arch-chroot /mnt /bin/env locale="$locale" hostname="$hostname" /bin/bash << "EOF"
-pacman -S --noconfirm networkmanager
-systemctl enable NetworkManager
-timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
-timedatectl set-timezone $timeZ
-ln -sf /usr/share/"$timeZ"
-hwclock --systohc
-sed -i "/^#.* "$locale" /s/^#//" /etc/locale.gen
-echo "LANG="$locale"" > /etc/locale.conf
-locale-gen
-echo "$hostname" > /etc/hostname
-echo -e "127.0.0.1\t"$hostname"\n::1\t"$hostname"\n127.0.1.1\t"$hostname".local\t"$hostname"" > /etc/hosts
-EOF
+    prompt "Setting up the system..." yellow
+    hwclock --systohc
+    pacman -S --noconfirm networkmanager > /dev/null
+    systemctl enable NetworkManager 2>&1
+    timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
+    timedatectl set-timezone $timeZ
+    ln -sf /usr/share/$timeZ
+    sed -i "/^#.* "$locale" /s/^#//" /etc/locale.gen
+    echo "LANG="$locale"" > /etc/locale.conf
+    locale-gen > /dev/null
+    echo "$hostname" > /etc/hostname
+    echo -e "127.0.0.1\t"$hostname"\n::1\t"$hostname"\n127.0.1.1\t"$hostname".local\t"$hostname"" > /etc/hosts
+    prompt "Finished setting up the system!" green
 }
 user_setup(){
-arch-chroot /mnt /bin/env uName="$uName" userPass="$userPass" /bin/bash << "EOF"
-useradd -m -G wheel $uName 
-echo ""$uName" ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
-echo "$uName":"$pw" | sudo chpasswd
-EOF
+    prompt "Setting up the user $uName..." yellow
+    useradd -m -G wheel $uName
+    if pacman -Qi sudo; then
+        echo ""$uName" ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
+    fi
+    if [ ! -z "$userPass" ]; then
+        echo "$uName":"$userPass" | chpasswd
+    fi
+    prompt "Finished setting up the user ${uName}!" green
 }
 grub_setup(){
-arch-chroot /mnt /bin/env fs="$fs" /bin/bash << "EOF"
-pacman -S --noconfirm grub efibootmgr
-mkdir /boot/efi
-mount "$fs"1 /boot/efi
-grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
-grub-mkconfig -o /boot/grub/grub.cfg
-mkdir /boot/efi/EFI/BOOT
-cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
-printf "bcf boot add 1 fs0:\\\EFI\\GRUB\\grubx64.efi\nexit" > /boot/efi/startup.nsh
-umount "$fs"1
-EOF
+    prompt "Downloading GRUB...." yellow
+    pacman -S --noconfirm grub > /dev/null
+    if $isUEFI; then
+        mkdir /boot/efi
+        mount ${fs}1 /boot/efi
+        prompt "Installing and configuring GRUB for UEFI, this might take a while..." yellow
+        pacman -S --noconfirm efibootmgr > /dev/null
+        grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi 2>&1
+        grub-mkconfig -o /boot/grub/grub.cfg 2>&1
+        mkdir /boot/efi/EFI/BOOT
+        cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+        printf "bcf boot add 1 fs0:\\\EFI\\GRUB\\grubx64.efi\nexit" > /boot/efi/startup.nsh
+    else
+        prompt "TODO" yellow
+        exit
+    fi
+    umount ${fs}1
+    prompt "Finished configuring GRUB!" green
 }
 prompt(){
     message="$1\033[0m\n"
@@ -233,12 +255,22 @@ prompt(){
     esac
     printf "$message"
 }
-system_check
-get_config
-get_pkgs
-get_drive
-format_fs
-arch_install
-system_setup
-user_setup
-grub_setup
+set -e
+if ls CHROOT &>/dev/null; then
+    source CHROOT
+    prompt "Running in chrooted mode!" green
+    system_setup
+    user_setup
+    grub_setup
+else
+    prompt "Running in non chrooted mode!" green
+    system_check
+    get_config
+    get_pkgs
+    get_drive
+    format_fs
+    arch_install
+    jumpChroot
+    rm -f /mnt/CHROOT
+    rm -f /mnt/install
+fi
