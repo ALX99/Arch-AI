@@ -11,7 +11,7 @@ locale="en_US.UTF-8"
 uName=""
 userPass=""
 hostname=""
-pkgs="base base-devel xorg-server xorg-xinit xorg-xrandr"
+pkgs="base xorg-server xorg-xinit xorg-xrandr"
 reqs=(dialog reflector dosfstools)
 isUEFI=false
 fs=""
@@ -23,11 +23,7 @@ system_check(){
     fi
 
     prompt "Checking for internet connection..." yellow
-    ping -q -c 1 -W 1 google.com >/dev/null
-    if [ $? -ne 0 ]; then
-        prompt "No network connection found!" red
-        exit 1
-    fi
+    ping -q -c 1 -W 1 google.com &>/dev/null || (prompt "No network connection found!" red && exit 1)
     prompt "Internet connection found!" green
 
     prompt "Checking for UEFI..." yellow
@@ -38,69 +34,73 @@ system_check(){
 
     prompt "Identifying GPU drivers..." yellow
     shopt -s nocasematch
-    gpu=$(lspci | grep -e VGA -e 3D)
-    if [[ "$gpu" == *"intel"* ]]; then
-        add_pkg xf86-video-intel
-        add_pkg mesa
-        prompt "Intel GPU found!" green
-    fi
-    if [[ "$gpu" == *"amd"* ]]; then
-        add_pkg xf86-video-amdgpu
-        add_pkg mesa
-        prompt "AMD GPU found!" green
-    fi
-    if [[ "$gpu" == *"nvidia"* ]]; then
-        add_pkg nvidia
-        add_pkg nvidia-utils
-        prompt "Nvidia GPU found!" green
-    fi
+    gpus=$(lspci | grep -e VGA -e 3D)
+    for gpu in $gpus; do
+        case "$gpu" in
+            *"intel"*)
+                add_pkg xf86-video-intel
+                add_pkg mesa
+                prompt "Intel GPU found!" green;;
+            *"amd"*)
+                add_pkg xf86-video-amdgpu
+                add_pkg mesa
+                prompt "AMD GPU found!" green;;
+            *"nvidia"*)
+                add_pkg nvidia
+                add_pkg nvidia-utils
+                prompt "Nvidia GPU found!" green;;
+        esac
+    done
 
     prompt "Installing additional packages if required..." yellow
-    pacman -S "${reqs[@]}" --needed --noconfirm > /dev/null
+    pacman -S "${reqs[@]}" --needed --noconfirm &>/dev/null
 }
 # Get username, hostname, password
 get_config(){
-    uName=$(dialog --inputbox "What username would you like?" 8 40  --output-fd 1)
+    prompt "What hostname would you like?" blue
+    read -r hostname
+    prompt "What username would you like?" blue
+    read -r uName
+
+    if [[ -z "$uName" || -z "$hostname" ]]; then
+        prompt "Username or hostname left blank, try again." red
+        get_config
+    fi
+
     while true; do
-        pass1=$(dialog --passwordbox "What password would you like for $uName?" 8 40 --output-fd 1)
-        pass2=$(dialog --passwordbox "Confirm password for $uName" 8 40 --output-fd 1)
+        prompt "What password would you like for $uName?" blue
+        read -s pass1
+        prompt "Confirm password." blue
+        read -s pass2
         if [ "$pass1" == "$pass2" ]; then
             userPass="$pass1"
-            break 2
+            break
         else
-            dialog --infobox "Passwords do not match, try again." 3 40; sleep 2
+            prompt "Passwords do not match, try again." red
         fi
     done
-    hostname=$(dialog --inputbox "What hostname would you like?" 8 40  --output-fd 1)
-    if [[ -z "$uName" || -z "$hostname" ]]; then
-        dialog --infobox "Username or hostname left blank, try again." 3 50; sleep 2
-        get_config
-    fi
-    dialog --yesno "Username: $uName\nHostname: $hostname\nEFI enabled: $isUEFI" 7 40
-
-    # Return if no confirmation 
-    if [ $? -ne 0 ]; then
-        get_config
-    fi
-    clear
 }
 # Ask for some additional popular packages
 get_pkgs(){
     cmd=(dialog --separate-output --checklist "Select additional packages:" 20 40 15)
-    args=(1 "Intel Ucode" off
-          2 "AMD Ucode" off
-          3 "PulseAudio" off
-          4 "AlsaAudio" off
-          5 "NeoVim" off)
+    args=(1 "base-devel" off
+          2 "Intel Ucode" off
+          3 "AMD Ucode" off
+          4 "PulseAudio" off
+          5 "AlsaAudio" off
+          6 "NeoVim" off
+          7 "OpenSSH" off)
     choices=$("${cmd[@]}" "${args[@]}" 2>&1 >/dev/tty)
     clear
     for i in $choices; do
         case $i in
-            1) add_pkg intel-ucode;;
-            2) add_pkg amd-ucode;;
-            3) add_pkg pulseaudio;;
-            4) add_pkg alsa-utils;;
-            5) add_pkg neovim;;
+            1) add_pkg base-devel;;
+            2) add_pkg intel-ucode;;
+            3) add_pkg amd-ucode;;
+            4) add_pkg pulseaudio;;
+            5) add_pkg alsa-utils;;
+            6) add_pkg neovim;;
+            7) add_pkg openssh;;
         esac
     done
 }
@@ -133,7 +133,10 @@ get_drive(){
         exit 1
     fi
 
-    read -r -p "Are you sure you want to format $fs?"
+}
+verify(){
+    dialog --title "FINAL CONFIRMATION" --yesno  "Username: $uName\nHostname: $hostname\nPackages: $pkgs\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
+    clear
 }
 # 1=bootloader, 2=swap, 3=root, 4=home
 format_fs(){
@@ -142,18 +145,15 @@ format_fs(){
         ls ${fs}?* | xargs -n1 umount || true
     done
 
-    if swapon --show | grep -q $fs; then
+    while swapon --show | grep -q $fs; do
         prompt "$fs seems to have swap partition, trying to disable it!" red
         swapoff $(swapon --show | grep $fs | awk '{ print $1}')
-    fi
+    done
+
     prompt "Creating partitions..." yellow
     (
     echo g
-    if $isUEFI; then
-        mkpart "+512M"
-    else
-        mkpart "+200M"
-    fi 
+    ($isUEFI && mkpart "+512M") || mkpart "+200M"
     mkpart "$swapP"
     mkpart "$rootP"
     mkpart 
@@ -162,11 +162,11 @@ format_fs(){
     ) | fdisk $fs > /dev/null
 
     prompt "Formatting partitions..." yellow
-    mkfs.fat -F32 ${fs}1 > /dev/null
-    mkswap ${fs}2 2>&1
-    swapon ${fs}2 > /dev/null
-    mkfs.ext4 -F ${fs}3 > /dev/null
-    mkfs.ext4 -F ${fs}4 > /dev/null
+    mkfs.fat -F32 ${fs}1  &>/dev/null
+    mkswap ${fs}2 &>/dev/null
+    swapon ${fs}2 &>/dev/null
+    mkfs.ext4 -F ${fs}3 &>/dev/null
+    mkfs.ext4 -F ${fs}4 &>/dev/null
 
     mount ${fs}3 /mnt
     mkdir /mnt/home
@@ -204,10 +204,10 @@ system_setup(){
     prompt "Setting up the system..." yellow
     hwclock --systohc
     pacman -S --noconfirm networkmanager > /dev/null
-    systemctl enable NetworkManager 2>&1
+    systemctl enable NetworkManager &>/dev/null
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
     timedatectl set-timezone $timeZ
-    ln -sf /usr/share/$timeZ
+    ln -sf /usr/share/$timeZ /etc/localtime
     sed -i "/^#.* "$locale" /s/^#//" /etc/locale.gen
     echo "LANG="$locale"" > /etc/locale.conf
     locale-gen > /dev/null
@@ -218,9 +218,7 @@ system_setup(){
 user_setup(){
     prompt "Setting up the user $uName..." yellow
     useradd -m -G wheel $uName
-    if pacman -Qi sudo; then
-        echo ""$uName" ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
-    fi
+    pacman -Qi sudo &>/dev/null && echo ""$uName" ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
     if [ ! -z "$userPass" ]; then
         echo "$uName":"$userPass" | chpasswd
     fi
@@ -232,10 +230,10 @@ grub_setup(){
     if $isUEFI; then
         mkdir /boot/efi
         mount ${fs}1 /boot/efi
-        prompt "Installing and configuring GRUB for UEFI, this might take a while..." yellow
+        prompt "Installing and configuring GRUB for UEFI..." yellow
         pacman -S --noconfirm efibootmgr > /dev/null
-        grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi 2>&1
-        grub-mkconfig -o /boot/grub/grub.cfg 2>&1
+        grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi &>/dev/null
+        grub-mkconfig -o /boot/grub/grub.cfg &>/dev/null
         mkdir /boot/efi/EFI/BOOT
         cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
         printf "bcf boot add 1 fs0:\\\EFI\\GRUB\\grubx64.efi\nexit" > /boot/efi/startup.nsh
@@ -252,6 +250,7 @@ prompt(){
     green) message="\033[1;32m$message";;
     yellow) message="\033[1;33m$message";;
     red) message="\033[1;31m$message";;
+    blue) message="\033[1;34m$message";;
     esac
     printf "$message"
 }
@@ -263,11 +262,13 @@ if ls CHROOT &>/dev/null; then
     user_setup
     grub_setup
 else
+    clear
     prompt "Running in non chrooted mode!" green
     system_check
     get_config
-    get_pkgs
     get_drive
+    get_pkgs
+    verify
     format_fs
     arch_install
     jumpChroot
