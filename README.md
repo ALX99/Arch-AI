@@ -10,8 +10,6 @@
 ## TODO
 
 + partiton size selection
-+ ~~keymap check~~ use `du` to help the user select keymap
-+ ~~copy script to /mnt instead of running all commands through chroot~~
 + DE and WM installation + xorg setup
 
 ## Might add

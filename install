@@ -2,7 +2,6 @@
 
 swapP="+1G"
 rootP="+10G"
-locale="en_US.UTF-8"
 
 # =========================== #
 # Nothing to be modified here #
@@ -11,8 +10,9 @@ locale="en_US.UTF-8"
 uName=""
 userPass=""
 hostname=""
+locale=""
 pkgs="base xorg-server xorg-xinit xorg-xrandr"
-reqs=(dialog reflector dosfstools)
+reqs=(dialog reflector dosfstools fzf)
 isUEFI=false
 fs=""
 
@@ -26,6 +26,10 @@ system_check(){
     ping -q -c 1 -W 1 google.com &>/dev/null || (prompt "No network connection found!" red && exit 1)
     prompt "Internet connection found!" green
 
+    prompt "Updating the package database, please be patient..." yellow
+    pacman -Sy >/dev/null
+    prompt "Updated the package database!" green
+
     prompt "Checking for UEFI..." yellow
     if [ "$(ls -A /sys/firmware/efi/efivars/ 2>/dev/null)" ]; then
         isUEFI=true
@@ -38,25 +42,44 @@ system_check(){
     for gpu in $gpus; do
         case "$gpu" in
             *"intel"*)
+                prompt "Intel GPU found!" green
                 add_pkg xf86-video-intel
                 add_pkg mesa
-                prompt "Intel GPU found!" green;;
+                add_pkg vulkan-intel
+                # HW acceleration
+                add_pkg libva-media-driver
+                add_pkg liva-intel-driver;;
             *"amd"*)
+                prompt "AMD GPU found!" green
                 add_pkg xf86-video-amdgpu
                 add_pkg mesa
-                prompt "AMD GPU found!" green;;
+                add_pkg vulkan-radeon
+                # HW acceleration
+                add_pkg libva-mesa-driver
+                add_pkg libva-vdpau-driver;;
             *"nvidia"*)
+                prompt "Nvidia GPU found!" green
                 add_pkg nvidia
-                add_pkg nvidia-utils
-                prompt "Nvidia GPU found!" green;;
+                add_pkg nvidia-utils;;
         esac
     done
+}
+# Installs missing requirements for this script (if any) 
+installReqs(){
+    cat /etc/pacman.d/mirrorlist | grep -q Reflector
+    if [ ! $? ]; then
+        prompt "Generating pacman mirrors, please be patient..." yellow
+        reflector --latest 200 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+        prompt "Done generating mirrors" green
+    fi
 
     prompt "Installing additional packages if required..." yellow
     pacman -S "${reqs[@]}" --needed --noconfirm &>/dev/null
 }
 # Get username, hostname, password
 get_config(){
+    prompt "Which locale do you want?" blue
+    locale=$(cat /etc/locale.gen | sed -n 's/#//; 24,$p' | fzf --height $(expr $(tput lines) - 1))
     prompt "What hostname would you like?" blue
     read -r hostname
     prompt "What username would you like?" blue
@@ -192,9 +215,6 @@ EOF
 arch_install(){
     prompt "Installing Arch Linux..." yellow
     timedatectl set-ntp true
-    prompt "Generating pacman mirrors, this might take a while..." yellow
-    reflector --latest 200 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-    prompt "Done generating mirrors" green
     prompt "Pacstrapping packages..." yellow
     pacstrap /mnt $pkgs
     genfstab -U /mnt > /mnt/etc/fstab
@@ -202,13 +222,13 @@ arch_install(){
 }
 system_setup(){
     prompt "Setting up the system..." yellow
-    hwclock --systohc
     pacman -S --noconfirm networkmanager > /dev/null
     systemctl enable NetworkManager &>/dev/null
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
     timedatectl set-timezone $timeZ
-    ln -sf /usr/share/$timeZ /etc/localtime
-    sed -i "/^#.* "$locale" /s/^#//" /etc/locale.gen
+    ln -sf /usr/share/zoneinfo/$timeZ /etc/localtime
+    hwclock --systohc
+    sed -i "/^#.*"$locale"/s/^#//" /etc/locale.gen
     echo "LANG="$locale"" > /etc/locale.conf
     locale-gen > /dev/null
     echo "$hostname" > /etc/hostname
@@ -265,6 +285,7 @@ else
     clear
     prompt "Running in non chrooted mode!" green
     system_check
+    installReqs
     get_config
     get_drive
     get_pkgs
