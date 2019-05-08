@@ -1,7 +1,7 @@
 #!/bin/bash
-
+set -x
 swapP="+1G"
-rootP="+10G"
+rootP="+15G"
 
 # =========================== #
 # Nothing to be modified here #
@@ -11,6 +11,7 @@ uName=""
 userPass=""
 hostname=""
 locale=""
+WM=""
 pkgs="base xorg-server xorg-xinit xorg-xrandr"
 reqs=(dialog reflector dosfstools fzf)
 isUEFI=false
@@ -80,10 +81,9 @@ installReqs(){
 get_config(){
     prompt "Which locale do you want?" blue
     locale=$(cat /etc/locale.gen | sed -n 's/#//; 24,$p' | fzf --height $(expr $(tput lines) - 1))
-    prompt "What hostname would you like?" blue
-    read -r hostname
-    prompt "What username would you like?" blue
-    read -r uName
+    locale=${locale::-2}
+    hostname=$(dialog --inputbox "What hostname would you like?" 8 40  --output-fd 1)
+    uName=$(dialog --inputbox "What username would you like?" 8 40  --output-fd 1)
 
     if [[ -z "$uName" || -z "$hostname" ]]; then
         prompt "Username or hostname left blank, try again." red
@@ -91,10 +91,8 @@ get_config(){
     fi
 
     while true; do
-        prompt "What password would you like for $uName?" blue
-        read -s pass1
-        prompt "Confirm password." blue
-        read -s pass2
+        pass1=$(dialog --inputbox "What password would you like for ${uName}?" 8 40  --output-fd 1)
+        pass2=$(dialog --inputbox "Confirm password for $uName" 8 40  --output-fd 1)
         if [ "$pass1" == "$pass2" ]; then
             userPass="$pass1"
             break
@@ -103,9 +101,23 @@ get_config(){
         fi
     done
 }
+getWM(){
+    cmd=(dialog --radiolist "Select WM/DE" 20 40 15)
+    args=(1 "i3-gaps" on
+          2 "KDE plasma" off)
+    choices=$("${cmd[@]}" "${args[@]}" 2>&1 >/dev/tty)
+    clear
+    for i in $choices; do
+        case $i in
+            1) WM="i3-gaps";;
+            2) WM="plasma";;
+        esac
+    done
+}
+
 # Ask for some additional popular packages
 get_pkgs(){
-    cmd=(dialog --separate-output --checklist "Select additional packages:" 20 40 15)
+    cmd=(dialog --separate-output --checklist "Select additional packages:" 10 40 7)
     args=(1 "base-devel" off
           2 "Intel Ucode" off
           3 "AMD Ucode" off
@@ -129,7 +141,7 @@ get_pkgs(){
 }
 add_pkg(){
     if [[ "$pkgs" != *$1* ]]; then
-        pkgs="$pkgs $1"
+        pkgs+=( "$1" )
     fi
 }
 # Asks which drive arch should be installed to
@@ -158,7 +170,7 @@ get_drive(){
 
 }
 verify(){
-    dialog --title "FINAL CONFIRMATION" --yesno  "Username: $uName\nHostname: $hostname\nPackages: $pkgs\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
+    dialog --title "FINAL CONFIRMATION" --yesno  "Username: $uName\nHostname: $hostname\nDE/WM: $WM\nPackages: $pkgs\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
     clear
 }
 # 1=bootloader, 2=swap, 3=root, 4=home
@@ -228,7 +240,7 @@ system_setup(){
     timedatectl set-timezone $timeZ
     ln -sf /usr/share/zoneinfo/$timeZ /etc/localtime
     hwclock --systohc
-    sed -i "/^#.*"$locale"/s/^#//" /etc/locale.gen
+    sed -i "/^#.*$locale/s/^#//" /etc/locale.gen
     echo "LANG="$locale"" > /etc/locale.conf
     locale-gen > /dev/null
     echo "$hostname" > /etc/hostname
@@ -264,6 +276,18 @@ grub_setup(){
     umount ${fs}1
     prompt "Finished configuring GRUB!" green
 }
+wm_setup(){
+    prompt "Downloading WM/DE..." yellow
+    case $WM in
+        i3-gaps)
+            pacman -S --needed i3-gaps rxvt-unicode
+            echo "exec i3" > /home/${uName}/.xinitrc;;
+        plasma)
+            pacman -S --needed plasma
+            echo "startkde" > /home/${uName}/.xinitrc;;
+    esac
+    prompt "Finished downloading WM/DE!" green
+}
 prompt(){
     message="$1\033[0m\n"
     case $2 in
@@ -274,21 +298,23 @@ prompt(){
     esac
     printf "$message"
 }
-set -e
+#set -e
 if ls CHROOT &>/dev/null; then
     source CHROOT
     prompt "Running in chrooted mode!" green
     system_setup
     user_setup
     grub_setup
+    wm_setup
 else
     clear
     prompt "Running in non chrooted mode!" green
     system_check
     installReqs
     get_config
-    get_drive
+    getWM
     get_pkgs
+    get_drive
     verify
     format_fs
     arch_install

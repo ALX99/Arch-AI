@@ -14,10 +14,11 @@
 
 ## Might add
 
-+ Automatic SSD trim and HDD defrag?
++ ~~Automatic SSD trim and HDD defrag?~~ Not needed
 + Option to change DNS server?
-+ CPU frequency scaling?
++ ~~CPU frequency scaling?~~ Not needed
 
 ## Not working
 
 + empty user password will leave the user unable to login
++ locale configiration not currently working
