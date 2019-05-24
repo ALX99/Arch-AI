@@ -1,24 +1,34 @@
 # Arch-AI
 
-**Still in development phase, should not be used!**
+Quick and easy Arch Linux installation script aimed towards setting up the most useful and crucial things you will need on your system.  
+It should *probably* work right now  if you want to use it but I'm continuously improving it when I have time.
+
+**Pull requests are welcome**
 
 ## Features
 
-+ Everything a normal arch installation would cover 
-+ Automatic timezone, UEFI, GPU driver installation/configuration
+* Drive formatting
+* User account  & hostname & sudo setup
+* WM/DE installation
+* Option to install additional common packages
+* Locale configuration and generation
+
+### Things that are done without input
+
+* Obtains fastest mirror before install
+* GPU driver detection + installation
+* Timezone + clock setup
+* GRUB installation
+* Xorg setup (No DM used)
 
 ## TODO
 
-+ partiton size selection
-+ DE and WM installation + xorg setup
-
-## Might add
-
-+ ~~Automatic SSD trim and HDD defrag?~~ Not needed
-+ Option to change DNS server?
-+ ~~CPU frequency scaling?~~ Not needed
+* root password is currently none I believe
+* Partition size selection
+* LUKS encryption
+* Better dialog experience
+* Option to change DNS server?
 
 ## Not working
 
-+ empty user password will leave the user unable to login
-+ locale configiration not currently working
+* ?

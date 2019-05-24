@@ -1,5 +1,4 @@
 #!/bin/bash
-set -x
 swapP="+1G"
 rootP="+11G"
 
@@ -24,7 +23,7 @@ system_check(){
     fi
 
     prompt "Checking for internet connection..." yellow
-    ping -q -c 1 -W 1 google.com &>/dev/null || (prompt "No network connection found!" red && exit 1)
+    ping -q -c 1 -W 1 google.com 1>/dev/null || (prompt "No network connection found!" red && exit 1)
     prompt "Internet connection found!" green
 
     prompt "Updating the package database, please be patient..." yellow
@@ -101,10 +100,11 @@ get_config(){
         fi
     done
 }
-getWM(){
+get_wm(){
     cmd=(dialog --radiolist "Select WM/DE" 20 40 15)
-    args=(1 "i3-gaps" on
-          2 "KDE plasma" off)
+    args=(1 "i3-gaps" off
+          2 "KDE plasma" off
+          3 "No DE/WM" on)
     local choice
     choice=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
@@ -189,7 +189,7 @@ format_fs(){
     mkpart 
     echo p 
     echo w
-    ) | fdisk "$fs" > /dev/null
+    ) | fdisk "$fs" 1> /dev/null
 
     prompt "Formatting partitions..." yellow
     mkfs.fat -F32 "${fs}"1  &>/dev/null
@@ -212,7 +212,7 @@ mkpart(){
 }
 jumpChroot(){
     printf "locale=\"$locale\"\nuName=\"$uName\"\nuserPass=\"$userPass\"\nhostname=\"$hostname\"\nisUEFI=\"$isUEFI\"\nfs=\"$fs\"\n WM=\"$WM\"\n" > /mnt/CHROOT
-    cp $0 /mnt/install
+    cp "$0" /mnt/install
     chmod 755 /mnt/install
 
 arch-chroot /mnt /bin/bash << "EOF"
@@ -220,20 +220,19 @@ arch-chroot /mnt /bin/bash << "EOF"
 EOF
 }
 arch_install(){
-    prompt "Installing Arch Linux..." yellow
-    timedatectl set-ntp true
     prompt "Pacstrapping packages..." yellow
     pacstrap /mnt "${pkgs[@]}"
     genfstab -U /mnt > /mnt/etc/fstab
-    prompt "Finished installing Arch" green
+    prompt "Finished pacstrapping packages" green
 }
 system_setup(){
     prompt "Setting up the system..." yellow
-    pacman -S --noconfirm networkmanager > /dev/null
+    pacman -S --noconfirm --needed networkmanager &> /dev/null
     systemctl enable NetworkManager &>/dev/null
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
-    timedatectl set-timezone "$timeZ"
     ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
+    timedatectl set-timezone "$timeZ"
+    timedatectl set-ntp true
     hwclock --systohc
     sed -i "/^#.*$locale/s/^#//" /etc/locale.gen
     echo "LANG=$locale" > /etc/locale.conf
@@ -245,41 +244,49 @@ system_setup(){
 user_setup(){
     prompt "Setting up the user $uName..." yellow
     useradd -m -G wheel "$uName"
-    pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
-    if [ -n "$userPass" ]; then
-        echo "$uName":"$userPass" | chpasswd
-    fi
+    pacman -Qi sudo 1>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
+    echo "$uName:$userPass" | chpasswd
     prompt "Finished setting up the user ${uName}!" green
 }
 grub_setup(){
     prompt "Downloading GRUB...." yellow
     pacman -S --noconfirm grub > /dev/null
     if $isUEFI; then
+        prompt "Installing and configuring GRUB for UEFI..." yellow
         mkdir /boot/efi
         mount "${fs}"1 /boot/efi
-        prompt "Installing and configuring GRUB for UEFI..." yellow
-        pacman -S --noconfirm efibootmgr > /dev/null
-        grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi &>/dev/null
-        grub-mkconfig -o /boot/grub/grub.cfg &>/dev/null
+        pacman -S --noconfirm --needed efibootmgr &> /dev/null
+        grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi 1>/dev/null
+        grub-mkconfig -o /boot/grub/grub.cfg 1>/dev/null
         mkdir /boot/efi/EFI/BOOT
         cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
         printf "bcf boot add 1 fs0:\\\EFI\\GRUB\\grubx64.efi\nexit" > /boot/efi/startup.nsh
     else
-        prompt "TODO" yellow
-        exit
+        # This hasn't been tested
+        prompt "Installing and configuring GRUB for BIOS..." yellow
+        mount "${fs}"1 /boot/
+        grub-install --target=i386-pc "${fs}"
+        grub-mkconfig -o /boot/grub/grub.cfg 1>/dev/null
     fi
     umount "${fs}"1
     prompt "Finished configuring GRUB!" green
 }
 wm_setup(){
+    userpath=/home/"$uName"/
     prompt "Downloading WM/DE..." yellow
-    case $WM in
+
+    # Start X server on login
+    printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x i3 >/dev/null && exec startx' > "$userpath".bash_profile
+    # Load X resources
+    echo "xrdb -load ~/.Xresources &" > "$userpath".xinitrc
+
+    case "$WM" in
         i3-gaps)
             pacman -S --needed --noconfirm  i3-gaps rxvt-unicode
-            echo "exec i3" > /home/"$uName"/.xinitrc;;
+            echo "exec i3" >> "$userpath".xinitrc;;
         plasma)
             pacman -S --needed --noconfirm plasma
-            echo "startkde" > /home/"$uName"/.xinitrc;;
+            echo "startkde" >> "$userpath".xinitrc;;
     esac
     prompt "Finished downloading WM/DE!" green
 }
@@ -300,20 +307,22 @@ if ls CHROOT &>/dev/null; then
     system_setup
     user_setup
     grub_setup
-    wm_setup
+    if [ -n "$WM" ]; then
+        wm_setup
+    fi
 else
     clear
     prompt "Running in non chrooted mode!" green
     system_check
     installReqs
     get_config
-    getWM
+    get_wm
     get_pkgs
     get_drive
     verify
     format_fs
     arch_install
     jumpChroot
-    rm -f /mnt/CHROOT
+    shred -fzvun 7 /mnt/CHROOT
     rm -f /mnt/install
 fi
