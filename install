@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 swapP="+1G"
-rootP="+15G"
+rootP="+11G"
 
 # =========================== #
 # Nothing to be modified here #
@@ -12,7 +12,7 @@ userPass=""
 hostname=""
 locale=""
 WM=""
-pkgs="base xorg-server xorg-xinit xorg-xrandr"
+pkgs=(base xorg-server xorg-xinit xorg-xrandr)
 reqs=(dialog reflector dosfstools fzf)
 isUEFI=false
 fs=""
@@ -67,7 +67,7 @@ system_check(){
 }
 # Installs missing requirements for this script (if any) 
 installReqs(){
-    cat /etc/pacman.d/mirrorlist | grep -q Reflector
+    grep -q Reflector /etc/pacman.d/mirrorlist
     if [ ! $? ]; then
         prompt "Generating pacman mirrors, please be patient..." yellow
         reflector --latest 200 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
@@ -80,7 +80,7 @@ installReqs(){
 # Get username, hostname, password
 get_config(){
     prompt "Which locale do you want?" blue
-    locale=$(cat /etc/locale.gen | sed -n 's/#//; 24,$p' | fzf --height $(expr $(tput lines) - 1))
+    locale=$(sed -n 's/#//; 24,$p' /etc/locale.gen | fzf --height $(expr $(tput lines) - 1))
     locale=${locale::-2}
     hostname=$(dialog --inputbox "What hostname would you like?" 8 40  --output-fd 1)
     uName=$(dialog --inputbox "What username would you like?" 8 40  --output-fd 1)
@@ -93,7 +93,7 @@ get_config(){
     while true; do
         pass1=$(dialog --inputbox "What password would you like for ${uName}?" 8 40  --output-fd 1)
         pass2=$(dialog --inputbox "Confirm password for $uName" 8 40  --output-fd 1)
-        if [ "$pass1" == "$pass2" ]; then
+        if [[ -n "$pass1" && "$pass1" == "$pass2" ]]; then
             userPass="$pass1"
             break
         else
@@ -105,14 +105,13 @@ getWM(){
     cmd=(dialog --radiolist "Select WM/DE" 20 40 15)
     args=(1 "i3-gaps" on
           2 "KDE plasma" off)
-    choices=$("${cmd[@]}" "${args[@]}" 2>&1 >/dev/tty)
+    local choice
+    choice=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
-    for i in $choices; do
-        case $i in
-            1) WM="i3-gaps";;
-            2) WM="plasma";;
-        esac
-    done
+    case $choice in
+        1) WM="i3-gaps";;
+        2) WM="plasma";;
+    esac
 }
 
 # Ask for some additional popular packages
@@ -125,7 +124,8 @@ get_pkgs(){
           5 "AlsaAudio" off
           6 "NeoVim" off
           7 "OpenSSH" off)
-    choices=$("${cmd[@]}" "${args[@]}" 2>&1 >/dev/tty)
+    local choice
+    choices=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
     for i in $choices; do
         case $i in
@@ -146,43 +146,38 @@ add_pkg(){
 }
 # Asks which drive arch should be installed to
 get_drive(){
-    tempFile=/tmp/counter.tmp
-    echo 0 > $tempFile # Temp file for storing value from loop
     lsblk -T; echo
-    ls /dev/sd*[a-z] | while read i; do
-        counter=$[$(cat $tempFile) + 1]
-        echo $counter > $tempFile
-        echo "$counter" "$i"
-    done
-    numDrives=$(cat $tempFile)
-    unlink $tempFile
+    drives=$(find /dev/sd*[a-z] | sort)
+    numDrives=$(echo "$drives" | wc -w)
 
-    while [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -gt "$numDrives" || "$choice" -le 0 ]]; do
-        read -r -p "Which drive would you like to install Arch on [1-"$numDrives"]: " choice
+    echo "$drives" | awk '{print NR,$0}'
+    while [[ "$choice" -le 0  || "$choice" -gt "$numDrives" ]]; do
+        read -r -p "Which drive would you like to install Arch on [1-$numDrives]: " choice
     done
 
-    fs=$(ls /dev/sd*[a-z] | sed -n "$choice"p)
+    fs=$(echo "$drives" | sed -n "$choice"p)
 
-    if [ -z $fs ]; then
+    if [ -z "$fs" ]; then
         prompt "Something went wrong!" red 
         exit 1
     fi
-
 }
 verify(){
-    dialog --title "FINAL CONFIRMATION" --yesno  "Username: $uName\nHostname: $hostname\nDE/WM: $WM\nPackages: $pkgs\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
+    dialog --title "FINAL CONFIRMATION" --yesno  "Username: $uName\nHostname: $hostname\nDE/WM: $WM\nPackages: ${pkgs[*]}\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
     clear
 }
 # 1=bootloader, 2=swap, 3=root, 4=home
 format_fs(){
-    while df | grep -q $fs; do
+    while df | grep -q "$fs"; do
         prompt "$fs seems to be mounted, trying to unmount!" red
-        ls ${fs}?* | xargs -n1 umount || true
+        find "$fs"[1-9] | while read -r partition; do
+            umount "$partition"
+        done
     done
 
-    while swapon --show | grep -q $fs; do
+    while swapon --show | grep -q "$fs"; do
         prompt "$fs seems to have swap partition, trying to disable it!" red
-        swapoff $(swapon --show | grep $fs | awk '{ print $1}')
+        swapoff "$(swapon --show | grep "$fs" | awk '{ print $1}')"
     done
 
     prompt "Creating partitions..." yellow
@@ -194,18 +189,18 @@ format_fs(){
     mkpart 
     echo p 
     echo w
-    ) | fdisk $fs > /dev/null
+    ) | fdisk "$fs" > /dev/null
 
     prompt "Formatting partitions..." yellow
-    mkfs.fat -F32 ${fs}1  &>/dev/null
-    mkswap ${fs}2 &>/dev/null
-    swapon ${fs}2 &>/dev/null
-    mkfs.ext4 -F ${fs}3 &>/dev/null
-    mkfs.ext4 -F ${fs}4 &>/dev/null
+    mkfs.fat -F32 "${fs}"1  &>/dev/null
+    mkswap "${fs}"2 &>/dev/null
+    swapon "${fs}"2 &>/dev/null
+    mkfs.ext4 -F "${fs}"3 &>/dev/null
+    mkfs.ext4 -F "${fs}"4 &>/dev/null
 
-    mount ${fs}3 /mnt
+    mount "${fs}"3 /mnt
     mkdir /mnt/home
-    mount ${fs}4 /mnt/home
+    mount "${fs}"4 /mnt/home
 }
 # sequence for creating a new partition
 mkpart(){
@@ -216,7 +211,7 @@ mkpart(){
     echo "$1"
 }
 jumpChroot(){
-    printf "locale=\"$locale\"\nuName=\"$uName\"\nuserPass=\"$userPass\"\nhostname=\"$hostname\"\nisUEFI=\"$isUEFI\"\nfs=\"$fs\"\n" > /mnt/CHROOT
+    printf "locale=\"$locale\"\nuName=\"$uName\"\nuserPass=\"$userPass\"\nhostname=\"$hostname\"\nisUEFI=\"$isUEFI\"\nfs=\"$fs\"\n WM=\"$WM\"\n" > /mnt/CHROOT
     cp $0 /mnt/install
     chmod 755 /mnt/install
 
@@ -228,7 +223,7 @@ arch_install(){
     prompt "Installing Arch Linux..." yellow
     timedatectl set-ntp true
     prompt "Pacstrapping packages..." yellow
-    pacstrap /mnt $pkgs
+    pacstrap /mnt "${pkgs[@]}"
     genfstab -U /mnt > /mnt/etc/fstab
     prompt "Finished installing Arch" green
 }
@@ -237,21 +232,21 @@ system_setup(){
     pacman -S --noconfirm networkmanager > /dev/null
     systemctl enable NetworkManager &>/dev/null
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
-    timedatectl set-timezone $timeZ
-    ln -sf /usr/share/zoneinfo/$timeZ /etc/localtime
+    timedatectl set-timezone "$timeZ"
+    ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
     hwclock --systohc
     sed -i "/^#.*$locale/s/^#//" /etc/locale.gen
-    echo "LANG="$locale"" > /etc/locale.conf
+    echo "LANG=$locale" > /etc/locale.conf
     locale-gen > /dev/null
     echo "$hostname" > /etc/hostname
-    echo -e "127.0.0.1\t"$hostname"\n::1\t"$hostname"\n127.0.1.1\t"$hostname".local\t"$hostname"" > /etc/hosts
+    echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" > /etc/hosts
     prompt "Finished setting up the system!" green
 }
 user_setup(){
     prompt "Setting up the user $uName..." yellow
-    useradd -m -G wheel $uName
-    pacman -Qi sudo &>/dev/null && echo ""$uName" ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
-    if [ ! -z "$userPass" ]; then
+    useradd -m -G wheel "$uName"
+    pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
+    if [ -n "$userPass" ]; then
         echo "$uName":"$userPass" | chpasswd
     fi
     prompt "Finished setting up the user ${uName}!" green
@@ -261,7 +256,7 @@ grub_setup(){
     pacman -S --noconfirm grub > /dev/null
     if $isUEFI; then
         mkdir /boot/efi
-        mount ${fs}1 /boot/efi
+        mount "${fs}"1 /boot/efi
         prompt "Installing and configuring GRUB for UEFI..." yellow
         pacman -S --noconfirm efibootmgr > /dev/null
         grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi &>/dev/null
@@ -273,18 +268,18 @@ grub_setup(){
         prompt "TODO" yellow
         exit
     fi
-    umount ${fs}1
+    umount "${fs}"1
     prompt "Finished configuring GRUB!" green
 }
 wm_setup(){
     prompt "Downloading WM/DE..." yellow
     case $WM in
         i3-gaps)
-            pacman -S --needed i3-gaps rxvt-unicode
-            echo "exec i3" > /home/${uName}/.xinitrc;;
+            pacman -S --needed --noconfirm  i3-gaps rxvt-unicode
+            echo "exec i3" > /home/"$uName"/.xinitrc;;
         plasma)
-            pacman -S --needed plasma
-            echo "startkde" > /home/${uName}/.xinitrc;;
+            pacman -S --needed --noconfirm plasma
+            echo "startkde" > /home/"$uName"/.xinitrc;;
     esac
     prompt "Finished downloading WM/DE!" green
 }
