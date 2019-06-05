@@ -1,10 +1,8 @@
 #!/bin/bash
+errorfile="err.txt" # Will be deleted when the script starts!!!
+
 swapP="+1G"
 rootP="+11G"
-
-# =========================== #
-# Nothing to be modified here #
-# =========================== #
 
 uName=""
 userPass=""
@@ -27,7 +25,7 @@ system_check(){
     prompt "Internet connection found!" green
 
     prompt "Updating the package database, please be patient..." yellow
-    pacman -Sy >/dev/null
+    pacman -Sy 1>/dev/null 2>>$errorfile
     prompt "Updated the package database!" green
 
     prompt "Checking for UEFI..." yellow
@@ -47,8 +45,8 @@ system_check(){
                 add_pkg mesa
                 add_pkg vulkan-intel
                 # HW acceleration
-                add_pkg libva-media-driver
-                add_pkg liva-intel-driver;;
+                add_pkg intel-media-driver
+                add_pkg libva-intel-driver;;
             *"amd"*)
                 prompt "AMD GPU found!" green
                 add_pkg xf86-video-amdgpu
@@ -74,7 +72,7 @@ installReqs(){
     fi
 
     prompt "Installing additional packages if required..." yellow
-    pacman -S "${reqs[@]}" --needed --noconfirm &>/dev/null
+    pacman -S "${reqs[@]}" --needed --noconfirm 1>/dev/null 2>>$errorfile
 }
 # Get username, hostname, password
 get_config(){
@@ -171,7 +169,7 @@ format_fs(){
     while df | grep -q "$fs"; do
         prompt "$fs seems to be mounted, trying to unmount!" red
         find "$fs"[1-9] | while read -r partition; do
-            umount "$partition"
+            umount "$partition" 1>/dev/null 2>>$errorfile
         done
     done
 
@@ -189,14 +187,14 @@ format_fs(){
     mkpart 
     echo p 
     echo w
-    ) | fdisk "$fs" 1> /dev/null
+    ) | fdisk "$fs" 1>/dev/null 2>>$errorfile
 
     prompt "Formatting partitions..." yellow
-    mkfs.fat -F32 "${fs}"1  &>/dev/null
-    mkswap "${fs}"2 &>/dev/null
-    swapon "${fs}"2 &>/dev/null
-    mkfs.ext4 -F "${fs}"3 &>/dev/null
-    mkfs.ext4 -F "${fs}"4 &>/dev/null
+    mkfs.fat -F32 "${fs}"1 1>/dev/null 2>>$errorfile
+    mkswap "${fs}"2 1>/dev/null 2>>$errorfile
+    swapon "${fs}"2 1>/dev/null 2>>$errorfile
+    mkfs.ext4 -F "${fs}"3 1>/dev/null 2>>$errorfile
+    mkfs.ext4 -F "${fs}"4 1>/dev/null 2>>$errorfile
 
     mount "${fs}"3 /mnt
     mkdir /mnt/home
@@ -227,8 +225,8 @@ arch_install(){
 }
 system_setup(){
     prompt "Setting up the system..." yellow
-    pacman -S --noconfirm --needed networkmanager &> /dev/null
-    systemctl enable NetworkManager &>/dev/null
+    pacman -S --noconfirm --needed networkmanager 1>/dev/null 2>>$errorfile
+    systemctl enable NetworkManager 1>/dev/null 2>>$errorfile
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
     ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
     timedatectl set-timezone "$timeZ"
@@ -236,7 +234,7 @@ system_setup(){
     hwclock --systohc
     sed -i "/^#.*$locale/s/^#//" /etc/locale.gen
     echo "LANG=$locale" > /etc/locale.conf
-    locale-gen > /dev/null
+    locale-gen 1>/dev/null 2>>$errorfile
     echo "$hostname" > /etc/hostname
     echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" > /etc/hosts
     prompt "Finished setting up the system!" green
@@ -244,20 +242,20 @@ system_setup(){
 user_setup(){
     prompt "Setting up the user $uName..." yellow
     useradd -m -G wheel "$uName"
-    pacman -Qi sudo 1>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
+    pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/"$uName"
     echo "$uName:$userPass" | chpasswd
     prompt "Finished setting up the user ${uName}!" green
 }
 grub_setup(){
     prompt "Downloading GRUB...." yellow
-    pacman -S --noconfirm grub > /dev/null
+    pacman -S --noconfirm grub 1>/dev/null 2>>$errorfile
     if $isUEFI; then
         prompt "Installing and configuring GRUB for UEFI..." yellow
         mkdir /boot/efi
         mount "${fs}"1 /boot/efi
-        pacman -S --noconfirm --needed efibootmgr &> /dev/null
-        grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi 1>/dev/null
-        grub-mkconfig -o /boot/grub/grub.cfg 1>/dev/null
+        pacman -S --noconfirm --needed efibootmgr 1>/dev/null 2>>$errorfile
+        grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi 1>/dev/null 2>>$errorfile
+        grub-mkconfig -o /boot/grub/grub.cfg 1>/dev/null 2>>$errorfile
         mkdir /boot/efi/EFI/BOOT
         cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
         printf "bcf boot add 1 fs0:\\\EFI\\GRUB\\grubx64.efi\nexit" > /boot/efi/startup.nsh
@@ -266,14 +264,14 @@ grub_setup(){
         prompt "Installing and configuring GRUB for BIOS..." yellow
         mount "${fs}"1 /boot/
         grub-install --target=i386-pc "${fs}"
-        grub-mkconfig -o /boot/grub/grub.cfg 1>/dev/null
+        grub-mkconfig -o /boot/grub/grub.cfg 1>/dev/null 2>>$errorfile
     fi
     umount "${fs}"1
     prompt "Finished configuring GRUB!" green
 }
 wm_setup(){
-    userpath=/home/"$uName"/
     prompt "Downloading WM/DE..." yellow
+    userpath=/home/"$uName"/
 
     # Start X server on login
     printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x i3 >/dev/null && exec startx' > "$userpath".bash_profile
@@ -282,10 +280,10 @@ wm_setup(){
 
     case "$WM" in
         i3-gaps)
-            pacman -S --needed --noconfirm  i3-gaps rxvt-unicode
+            pacman -S --needed --noconfirm  i3-gaps rxvt-unicode 1>/dev/null 2>>$errorfile
             echo "exec i3" >> "$userpath".xinitrc;;
         plasma)
-            pacman -S --needed --noconfirm plasma
+            pacman -S --needed --noconfirm plasma 1>/dev/null 2>>$errorfile
             echo "startkde" >> "$userpath".xinitrc;;
     esac
     prompt "Finished downloading WM/DE!" green
@@ -314,6 +312,7 @@ else
     clear
     prompt "Running in non chrooted mode!" green
     system_check
+    rm -f "$errorfile"
     installReqs
     get_config
     get_wm
