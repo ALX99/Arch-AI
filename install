@@ -1,5 +1,8 @@
 #!/bin/bash
-errorfile="err.txt" # Will be deleted when the script starts!!!
+
+# File where installation errors will be written.
+# Will be saved in the root parition of the new installation.
+errorfile="err.txt"
 
 swapP="+1G"
 rootP="+11G"
@@ -10,7 +13,7 @@ hostname=""
 locale=""
 WM=""
 pkgs=(base xorg-server xorg-xinit xorg-xrandr)
-reqs=(dialog reflector dosfstools fzf)
+reqs=(dialog reflector dosfstools fzf arch-install-scripts)
 isUEFI=false
 fs=""
 
@@ -144,7 +147,7 @@ add_pkg(){
 }
 # Asks which drive arch should be installed to
 get_drive(){
-    lsblk -T; echo
+    lsblk; echo
     drives=$(find /dev/sd*[a-z] | sort)
     numDrives=$(echo "$drives" | wc -w)
 
@@ -199,6 +202,12 @@ format_fs(){
     mount "${fs}"3 /mnt
     mkdir /mnt/home
     mount "${fs}"4 /mnt/home
+
+    # Move errors to the new arch installation
+    cat "$errorfile" > /mnt/"$errorfile"
+    mv /mnt/"$errorfile" /mnt/"$errorfile"/"$uName"/
+    rm -r "$errorfile" &>/dev/null
+
 }
 # sequence for creating a new partition
 mkpart(){

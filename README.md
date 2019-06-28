@@ -1,7 +1,7 @@
 # Arch-AI
 
 Quick and easy Arch Linux installation script aimed towards setting up the most useful and crucial things you will need on your system.  
-It should *probably* work right now  if you want to use it but I'm continuously improving it when I have time.
+It should *probably* work right now if you want to use it but I'm continuously improving it when I have time.
 
 **Pull requests are welcome**
 
@@ -12,6 +12,7 @@ It should *probably* work right now  if you want to use it but I'm continuously 
 * WM/DE installation
 * Option to install additional common packages
 * Locale configuration and generation
+* Error log
 
 ### Things that are done without input
 
@@ -31,4 +32,4 @@ It should *probably* work right now  if you want to use it but I'm continuously 
 
 ## Not working
 
-* ?
+* i3 doesn't work since there is some package missing...
