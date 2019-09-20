@@ -18,10 +18,8 @@ isUEFI=false
 fs=""
 
 system_check(){
-    if [ $EUID -ne 0 ]; then
-        prompt "This script must be run as root" red
-        exit 1
-    fi
+    set -e
+    [ $EUID -eq 0 ] || (prompt "This script must be run as root" red; exit 1)
 
     prompt "Checking for internet connection..." yellow
     ping -q -c 1 -W 1 google.com 1>/dev/null || (prompt "No network connection found!" red && exit 1)
@@ -91,13 +89,13 @@ get_config(){
     fi
 
     while true; do
-        pass1=$(dialog --inputbox "What password would you like for ${uName}?" 8 40  --output-fd 1)
-        pass2=$(dialog --inputbox "Confirm password for $uName" 8 40  --output-fd 1)
-        if [[ -n "$pass1" && "$pass1" == "$pass2" ]]; then
+        pass1=$(dialog --passwordbox "What password would you like for ${uName}?" 8 40  --output-fd 1)
+        pass2=$(dialog --passwordbox  "Confirm password for $uName" 8 40  --output-fd 1)
+        if [ "$pass1" == "$pass2" ]; then
             userPass="$pass1"
             break
         else
-            prompt "Passwords do not match, try again." red
+            dialog --pause "Passwords do not match, try again." 8 40 3
         fi
     done
 }
@@ -143,6 +141,7 @@ get_pkgs(){
     done
 }
 add_pkg(){
+    # Add package to list if not already there
     if [[ "$pkgs" != *$1* ]]; then
         pkgs+=( "$1" )
     fi
