@@ -331,6 +331,8 @@ else
     format_fs
     arch_install
     jumpChroot
-    shred -fzvun 7 /mnt/CHROOT
+    prompt "Shredding info..." yellow
+    shred -fzvun 7 /mnt/CHROOT 1>/dev/null
     rm -f /mnt/install
+    prompt "Arch Linux successfully installed!" green
 fi
