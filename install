@@ -105,13 +105,15 @@ get_wm(){
     cmd=(dialog --radiolist "Select WM/DE" 20 40 15)
     args=(1 "i3-gaps" off
           2 "KDE plasma" off
-          3 "No DE/WM" on)
+          3 "XFCE 4" off
+          4 "No DE/WM" on)
     local choice
     choice=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
     case $choice in
         1) WM="i3-gaps";;
         2) WM="plasma";;
+        3) WM="xfce";;
     esac
 }
 
@@ -279,14 +281,12 @@ grub_setup(){
     prompt "Finished configuring GRUB!" green
 }
 wm_setup(){
-    prompt "Downloading WM/DE..." yellow
     userpath=/home/"$uName"/
 
-    # Start X server on login
-    printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x i3 >/dev/null && exec startx' > "$userpath".bash_profile
     # Load X resources
     echo "xrdb -load ~/.Xresources &" > "$userpath".xinitrc
 
+    prompt "Downloading WM/DE..." yellow
     case "$WM" in
         i3-gaps)
             pacman -S --needed --noconfirm  i3-gaps rxvt-unicode 1>/dev/null 2>>$errorfile
@@ -294,8 +294,14 @@ wm_setup(){
         plasma)
             pacman -S --needed --noconfirm plasma 1>/dev/null 2>>$errorfile
             echo "startkde" >> "$userpath".xinitrc;;
+        xfce)
+            pacman -S --needed --noconfirm xfce4 1>/dev/null 2>>$errorfile
+            echo "exec startxfce4" >> "$userpath".xinitrc;;
     esac
     prompt "Finished downloading WM/DE!" green
+
+    # Start X server on login if not already running
+    printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x Xorg >/dev/null && exec startx' > "$userpath".bash_profile
 }
 prompt(){
     message="$1\033[0m\n"
@@ -314,7 +320,7 @@ if ls CHROOT &>/dev/null; then
     system_setup
     user_setup
     grub_setup
-    if [ -n "$WM" ]; then
+    if [ ! -z "$WM" ]; then
         wm_setup
     fi
 else
