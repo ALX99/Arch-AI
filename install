@@ -18,7 +18,6 @@ isUEFI=false
 fs=""
 
 system_check(){
-    set -e
     [ $EUID -eq 0 ] || (prompt "This script must be run as root" red; exit 1)
 
     prompt "Checking for internet connection..." yellow
@@ -291,7 +290,7 @@ wm_setup(){
             pacman -S --needed --noconfirm  i3-gaps rxvt-unicode 1>/dev/null 2>>$errorfile
             echo "exec i3" >> "$userpath".xinitrc;;
         plasma)
-            pacman -S --needed --noconfirm plasma 1>/dev/null 2>>$errorfile
+            pacman -S --needed --noconfirm plasma dolphin konsole 1>/dev/null 2>>$errorfile
             echo "startkde" >> "$userpath".xinitrc;;
         xfce)
             pacman -S --needed --noconfirm xfce4 1>/dev/null 2>>$errorfile
@@ -312,7 +311,6 @@ prompt(){
     esac
     printf "$message"
 }
-#set -e
 if ls CHROOT &>/dev/null; then
     source CHROOT
     prompt "Running in chrooted mode!" green
