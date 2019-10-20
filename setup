@@ -1,0 +1,109 @@
+#!/bin/bash
+# Sets up the system
+
+install_pkgs(){
+    
+}
+system_setup() {
+    prompt "Setting up the system..." yellow
+    out true pacman -S --noconfirm --needed networkmanager
+    out true systemctl enable NetworkManager
+    timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
+    out true ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
+    out true timedatectl set-timezone "$timeZ"
+    timedatectl set-ntp true
+    hwclock --systohc
+    sed -i "/$locale/s/^#//g" /etc/locale.gen
+    localectl set-locale LANG="$locale"
+    out true locale-gen
+    echo "$hostname" >/etc/hostname
+    echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
+    prompt "Finished setting up the system!" green
+}
+user_setup() {
+    prompt "Setting up the user $uName..." yellow
+    useradd -m -G wheel "$uName"
+    pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers.d/"$uName"
+    echo "$uName:$userPass" | chpasswd
+    prompt "Finished setting up the user ${uName}!" green
+}
+grub_setup() {
+    prompt "Downloading GRUB...." yellow
+    out true pacman -S --noconfirm grub
+    if $isUEFI; then
+        prompt "Installing and configuring GRUB for UEFI..." yellow
+        mkdir /boot/efi
+        mount "${fs}"1 /boot/efi
+        out true pacman -S --noconfirm --needed efibootmgr
+        out true grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
+        out true grub-mkconfig -o /boot/grub/grub.cfg
+        mkdir /boot/efi/EFI/BOOT
+        cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+        printf "bcf boot add 1 fs0:\\\EFI\\GRUB\\grubx64.efi\nexit" >/boot/efi/startup.nsh
+    else
+        # This hasn't been tested
+        prompt "Installing and configuring GRUB for BIOS..." yellow
+        mount "${fs}"1 /boot/
+        grub-install --target=i386-pc "${fs}"
+        out true grub-mkconfig -o /boot/grub/grub.cfg
+    fi
+    umount "${fs}"1
+    prompt "Finished configuring GRUB!" green
+}
+wm_setup() {
+    userpath=/home/"$uName"/
+    
+    # Load X resources
+    echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
+    
+    prompt "Downloading WM/DE..." yellow
+    case "$WM" in
+        i3-gaps)
+            out true pacman -S --needed --noconfirm i3-gaps rxvt-unicode
+            echo "exec i3" >>"$userpath".xinitrc
+        ;;
+        plasma)
+            out true pacman -S --needed --noconfirm plasma
+            echo "exec startplasma-x11" >>"$userpath".xinitrc
+        ;;
+        xfce)
+            out true pacman -S --needed --noconfirm xfce4
+            echo "exec startxfce4" >>"$userpath".xinitrc
+        ;;
+    esac
+    prompt "Finished downloading WM/DE!" green
+    
+    # Start X server on login if not already running
+    printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x Xorg >/dev/null && exec startx' >"$userpath".bash_profile
+}
+
+out() {
+    local logError="$1"
+    shift
+    if $verbose && $logError; then
+        echo "COMMAND: $@" >>$errorfile
+        local lines="$(wc -l < $errorfile)"
+        "$@" 2>>$errorfile
+        [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
+        elif $verbose && [ "$logError" == false ]; then
+        "$@"
+        elif [ $verbose == false ] && $logError; then
+        echo "COMMAND: $@" >>$errorfile
+        local lines="$(wc -l < $errorfile)"
+        "$@" 1>/dev/null 2>>$errorfile
+        [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
+    else
+        "$@" >/dev/null 2>&1
+    fi
+}
+# Source settings written by install
+# shellcheck disable=SC1091
+source info
+source sharedfuncs
+prompt "Running in chrooted mode!" green
+system_setup
+user_setup
+grub_setup
+if [ -n "$WM" ]; then
+    wm_setup
+fi

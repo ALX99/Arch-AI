@@ -12,7 +12,7 @@ userPass=""
 hostname=""
 locale=""
 WM=""
-pkgs=(base linux linux-firmware xorg-server xorg-xinit xorg-xrandr)
+pkgs=(xorg-server xorg-xinit xorg-xrandr)
 reqs=(dialog reflector dosfstools fzf arch-install-scripts)
 isUEFI=false
 fs=""
@@ -238,9 +238,6 @@ format_fs() {
     mount "$root" /mnt
     mkdir /mnt/home
     mount "$home" /mnt/home
-    
-    # Move errors to the new arch installation
-    mv "$errorfile" /mnt/"$errorfile"
 }
 # sequence for creating a new partition
 mkpart() {
@@ -251,101 +248,23 @@ mkpart() {
     echo "$1"
 }
 jumpChroot() {
-    printf "locale=\"$locale\"\nuName=\"$uName\"\nuserPass=\"$userPass\"\nhostname=\"$hostname\"\nisUEFI=\"$isUEFI\"\nfs=\"$fs\"\n WM=\"$WM\"\n" >/mnt/CHROOT
-    cp "$0" /mnt/install
-    chmod 755 /mnt/install
-    
+    # Move errors to the new arch installation
+    mv "$errorfile" /mnt/"$errorfile"
+    errorfile=/mnt/"$errorfile"
+    ( set -o posix ; set ) > /mnt/info
+    wget -O /mnt/setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup
+    wget -O /mnt/sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/develop/sharedfuncs
+    chmod 755 /mnt/setup
+
     arch-chroot /mnt /bin/bash <<"EOF"
-./install
+./setup
 EOF
 }
 arch_install() {
     prompt "Pacstrapping packages..." yellow
-    pacstrap /mnt "${pkgs[@]}"
+    pacstrap /mnt base linux linux-firmware
     genfstab -U /mnt >/mnt/etc/fstab
     prompt "Finished pacstrapping packages" green
-}
-system_setup() {
-    prompt "Setting up the system..." yellow
-    out true pacman -S --noconfirm --needed networkmanager
-    out true systemctl enable NetworkManager
-    timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
-    out true ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
-    out true timedatectl set-timezone "$timeZ"
-    timedatectl set-ntp true
-    hwclock --systohc
-    sed -i "/$locale/s/^#//g" /etc/locale.gen
-    localectl set-locale LANG="$locale"
-    out true locale-gen
-    echo "$hostname" >/etc/hostname
-    echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
-    prompt "Finished setting up the system!" green
-}
-user_setup() {
-    prompt "Setting up the user $uName..." yellow
-    useradd -m -G wheel "$uName"
-    pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers.d/"$uName"
-    echo "$uName:$userPass" | chpasswd
-    prompt "Finished setting up the user ${uName}!" green
-}
-grub_setup() {
-    prompt "Downloading GRUB...." yellow
-    out true pacman -S --noconfirm grub
-    if $isUEFI; then
-        prompt "Installing and configuring GRUB for UEFI..." yellow
-        mkdir /boot/efi
-        mount "${fs}"1 /boot/efi
-        out true pacman -S --noconfirm --needed efibootmgr
-        out true grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
-        out true grub-mkconfig -o /boot/grub/grub.cfg
-        mkdir /boot/efi/EFI/BOOT
-        cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
-        printf "bcf boot add 1 fs0:\\\EFI\\GRUB\\grubx64.efi\nexit" >/boot/efi/startup.nsh
-    else
-        # This hasn't been tested
-        prompt "Installing and configuring GRUB for BIOS..." yellow
-        mount "${fs}"1 /boot/
-        grub-install --target=i386-pc "${fs}"
-        out true grub-mkconfig -o /boot/grub/grub.cfg
-    fi
-    umount "${fs}"1
-    prompt "Finished configuring GRUB!" green
-}
-wm_setup() {
-    userpath=/home/"$uName"/
-    
-    # Load X resources
-    echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
-    
-    prompt "Downloading WM/DE..." yellow
-    case "$WM" in
-        i3-gaps)
-            out true pacman -S --needed --noconfirm i3-gaps rxvt-unicode
-            echo "exec i3" >>"$userpath".xinitrc
-        ;;
-        plasma)
-            out true pacman -S --needed --noconfirm plasma
-            echo "exec startplasma-x11" >>"$userpath".xinitrc
-        ;;
-        xfce)
-            out true pacman -S --needed --noconfirm xfce4
-            echo "exec startxfce4" >>"$userpath".xinitrc
-        ;;
-    esac
-    prompt "Finished downloading WM/DE!" green
-    
-    # Start X server on login if not already running
-    printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x Xorg >/dev/null && exec startx' >"$userpath".bash_profile
-}
-prompt() {
-    message="$1\033[0m\n"
-    case $2 in
-        green) message="\033[1;32m$message" ;;
-        yellow) message="\033[1;33m$message" ;;
-        red) message="\033[1;31m$message" ;;
-        blue) message="\033[1;34m$message" ;;
-    esac
-    printf "$message"
 }
 # Controls where all the text goes
 out() {
@@ -367,32 +286,19 @@ out() {
         "$@" >/dev/null 2>&1
     fi
 }
-if ls CHROOT &>/dev/null; then
-    source CHROOT
-    prompt "Running in chrooted mode!" green
-    system_setup
-    user_setup
-    grub_setup
-    if [ -n "$WM" ]; then
-        wm_setup
-    fi
-else
-    clear
-    read_arguments "$@"
-    prompt "Running in non chrooted mode!" green
-    system_check
-    rm -f "$errorfile"
-    installReqs
-    get_config
-    get_wm
-    get_pkgs
-    get_drive
-    verify
-    format_fs
-    arch_install
-    jumpChroot
-    prompt "Shredding info..." yellow
-    shred -fzvun 7 /mnt/CHROOT 1>/dev/null
-    rm -f /mnt/install
-    prompt "Arch Linux successfully installed!" green
-fi
+source sharedfuncs
+
+read_arguments "$@"
+prompt "Running in non chrooted mode!" green
+system_check
+rm -f "$errorfile"
+installReqs
+get_config
+get_wm
+get_pkgs
+get_drive
+verify
+format_fs
+arch_install
+jumpChroot
+prompt "Arch Linux successfully installed!" green
