@@ -12,13 +12,12 @@ userPass=""
 hostname=""
 locale=""
 WM=""
-pkgs=(base xorg-server xorg-xinit xorg-xrandr)
+pkgs=(base linux linux-firmware xorg-server xorg-xinit xorg-xrandr)
 reqs=(dialog reflector dosfstools fzf arch-install-scripts)
 isUEFI=false
 fs=""
 
 system_check(){
-    set -e
     [ $EUID -eq 0 ] || (prompt "This script must be run as root" red; exit 1)
 
     prompt "Checking for internet connection..." yellow
@@ -292,7 +291,7 @@ wm_setup(){
             echo "exec i3" >> "$userpath".xinitrc;;
         plasma)
             pacman -S --needed --noconfirm plasma 1>/dev/null 2>>$errorfile
-            echo "startkde" >> "$userpath".xinitrc;;
+            echo "exec startplasma-x11" >> "$userpath".xinitrc;;
         xfce)
             pacman -S --needed --noconfirm xfce4 1>/dev/null 2>>$errorfile
             echo "exec startxfce4" >> "$userpath".xinitrc;;
@@ -312,7 +311,6 @@ prompt(){
     esac
     printf "$message"
 }
-#set -e
 if ls CHROOT &>/dev/null; then
     source CHROOT
     prompt "Running in chrooted mode!" green
