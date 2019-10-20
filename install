@@ -76,9 +76,10 @@ installReqs(){
 }
 # Get username, hostname, password
 get_config(){
+    local locale_list="$(cat /etc/locale.gen | grep UTF-8 | sed 's/\..*$//' | sed '/@/d' | awk '{print $1}' | uniq | sed 's/#//g')"
     prompt "Which locale do you want?" blue
-    locale=$(sed -n 's/#//; 24,$p' /etc/locale.gen | fzf --height $(expr $(tput lines) - 1))
-    locale=${locale::-2}
+    locale=$(echo "$locale_list" | fzf --height $(expr $(tput lines) - 1))
+    locale="$locale".UTF-8
     hostname=$(dialog --inputbox "What hostname would you like?" 8 40  --output-fd 1)
     uName=$(dialog --inputbox "What username would you like?" 8 40  --output-fd 1)
 
@@ -162,6 +163,11 @@ get_drive(){
         prompt "Something went wrong!" red 
         exit 1
     fi
+    bl="${fs}"1
+    swap="${fs}"2
+    root="${fs}"3
+    home="${fs}"4
+
 }
 verify(){
     dialog --title "FINAL CONFIRMATION" --yesno  "Username: $uName\nHostname: $hostname\nDE/WM: $WM\nPackages: ${pkgs[*]}\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
@@ -193,15 +199,15 @@ format_fs(){
     ) | fdisk "$fs" 1>/dev/null 2>>$errorfile
 
     prompt "Formatting partitions..." yellow
-    mkfs.fat -F32 "${fs}"1 1>/dev/null 2>>$errorfile
-    mkswap "${fs}"2 1>/dev/null 2>>$errorfile
-    swapon "${fs}"2 1>/dev/null 2>>$errorfile
-    mkfs.ext4 -F "${fs}"3 1>/dev/null 2>>$errorfile
-    mkfs.ext4 -F "${fs}"4 1>/dev/null 2>>$errorfile
+    mkfs.fat -F32 "$bl" 1>/dev/null 2>>$errorfile
+    mkswap "$swap" 1>/dev/null 2>>$errorfile
+    swapon "$swap" 1>/dev/null 2>>$errorfile
+    mkfs.ext4 -F "$root" 1>/dev/null 2>>$errorfile
+    mkfs.ext4 -F "$home" 1>/dev/null 2>>$errorfile
 
-    mount "${fs}"3 /mnt
+    mount "$root" /mnt
     mkdir /mnt/home
-    mount "${fs}"4 /mnt/home
+    mount "$home" /mnt/home
 
     # Move errors to the new arch installation
     cat "$errorfile" > /mnt/"$errorfile"
@@ -237,12 +243,12 @@ system_setup(){
     pacman -S --noconfirm --needed networkmanager 1>/dev/null 2>>$errorfile
     systemctl enable NetworkManager 1>/dev/null 2>>$errorfile
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
-    ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
-    timedatectl set-timezone "$timeZ"
+    ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime 2>>$errorfile
+    timedatectl set-timezone "$timeZ" 2>>$errorfile
     timedatectl set-ntp true
     hwclock --systohc
-    sed -i "/^#.*$locale/s/^#//" /etc/locale.gen
-    echo "LANG=$locale" > /etc/locale.conf
+    sed -i "/$locale/s/^#//g" /etc/locale.gen
+    localectl set-locale LANG="$locale"
     locale-gen 1>/dev/null 2>>$errorfile
     echo "$hostname" > /etc/hostname
     echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" > /etc/hosts
@@ -317,7 +323,7 @@ if ls CHROOT &>/dev/null; then
     system_setup
     user_setup
     grub_setup
-    if [ ! -z "$WM" ]; then
+    if [ -n "$WM" ]; then
         wm_setup
     fi
 else
