@@ -1,8 +1,12 @@
 #!/bin/bash
 # Sets up the system
 
-install_pkgs(){
-    
+user_setup() {
+    prompt "Setting up the user $uName..." yellow
+    useradd -m -G wheel "$uName"
+    pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers.d/"$uName"
+    echo "$uName:$userPass" | chpasswd
+    prompt "Finished setting up the user ${uName}!" green
 }
 system_setup() {
     prompt "Setting up the system..." yellow
@@ -20,20 +24,13 @@ system_setup() {
     echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
     prompt "Finished setting up the system!" green
 }
-user_setup() {
-    prompt "Setting up the user $uName..." yellow
-    useradd -m -G wheel "$uName"
-    pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers.d/"$uName"
-    echo "$uName:$userPass" | chpasswd
-    prompt "Finished setting up the user ${uName}!" green
-}
 grub_setup() {
     prompt "Downloading GRUB...." yellow
     out true pacman -S --noconfirm grub
     if $isUEFI; then
         prompt "Installing and configuring GRUB for UEFI..." yellow
         mkdir /boot/efi
-        mount "${fs}"1 /boot/efi
+        mount "$bl" /boot/efi
         out true pacman -S --noconfirm --needed efibootmgr
         out true grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
         out true grub-mkconfig -o /boot/grub/grub.cfg
@@ -43,12 +40,17 @@ grub_setup() {
     else
         # This hasn't been tested
         prompt "Installing and configuring GRUB for BIOS..." yellow
-        mount "${fs}"1 /boot/
-        grub-install --target=i386-pc "${fs}"
+        mount "$bl" /boot/
+        grub-install --target=i386-pc "$fs"
         out true grub-mkconfig -o /boot/grub/grub.cfg
     fi
-    umount "${fs}"1
+    umount "$bl"
     prompt "Finished configuring GRUB!" green
+}
+install_pkgs(){
+    prompt "Downloading additional packages..." yellow
+    pacman -S --noconfirm --needed "${pkgs[@]}"
+    prompt "Finished downloading additional packages!" green
 }
 wm_setup() {
     userpath=/home/"$uName"/
@@ -77,19 +79,20 @@ wm_setup() {
     printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x Xorg >/dev/null && exec startx' >"$userpath".bash_profile
 }
 
+# Controls where all the text goes
 out() {
-    local logError="$1"
+    local logError="$1" lines
     shift
     if $verbose && $logError; then
         echo "COMMAND: $@" >>$errorfile
-        local lines="$(wc -l < $errorfile)"
+        lines="$(wc -l < $errorfile)"
         "$@" 2>>$errorfile
         [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
         elif $verbose && [ "$logError" == false ]; then
         "$@"
         elif [ $verbose == false ] && $logError; then
         echo "COMMAND: $@" >>$errorfile
-        local lines="$(wc -l < $errorfile)"
+        lines="$(wc -l < $errorfile)"
         "$@" 1>/dev/null 2>>$errorfile
         [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
     else
@@ -101,9 +104,10 @@ out() {
 source info
 source sharedfuncs
 prompt "Running in chrooted mode!" green
-system_setup
 user_setup
+system_setup
 grub_setup
+install_pkgs
 if [ -n "$WM" ]; then
     wm_setup
 fi

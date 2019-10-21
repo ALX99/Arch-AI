@@ -1,21 +1,14 @@
 #!/bin/bash
 
-# File where installation errors will be written.
-# Will be saved in the root parition of the new installation.
+# This file will be forcefully removed when starting this script.
+# Keep this in mind if wanting to change this file for whatever reason
 errorfile="err.txt"
 
 swapP="+1G"
 rootP="+11G"
-
-uName=""
-userPass=""
-hostname=""
-locale=""
-WM=""
 pkgs=(xorg-server xorg-xinit xorg-xrandr)
 reqs=(dialog reflector dosfstools fzf arch-install-scripts)
 isUEFI=false
-fs=""
 
 read_arguments() {
     OPTIONS=v
@@ -41,6 +34,7 @@ read_arguments() {
     done
 }
 system_check() {
+    local gpus gpu
     if [ $EUID -ne 0 ]; then
         prompt "This script must be run as root" red
         exit 1
@@ -105,7 +99,8 @@ installReqs() {
 }
 # Get username, hostname, password
 get_config() {
-    local locale_list="$(cat /etc/locale.gen | grep UTF-8 | sed 's/\..*$//' | sed '/@/d' | awk '{print $1}' | uniq | sed 's/#//g')"
+    local locale_list pass1 pass2
+    locale_list="$(grep UTF-8 /etc/locale.gen | sed 's/\..*$//' | sed '/@/d' | awk '{print $1}' | uniq | sed 's/#//g')"
     prompt "Which locale do you want?" blue
     locale=$(echo "$locale_list" | fzf --height $(expr $(tput lines) - 1))
     locale="$locale".UTF-8
@@ -121,6 +116,7 @@ get_config() {
         pass1=$(dialog --passwordbox "What password would you like for ${uName}?" 8 40 --output-fd 1)
         pass2=$(dialog --passwordbox "Confirm password for $uName" 8 40 --output-fd 1)
         if [ "$pass1" == "$pass2" ]; then
+            # shellcheck disable=SC2034  # userPass is written to info file
             userPass="$pass1"
             break
         else
@@ -129,23 +125,24 @@ get_config() {
     done
 }
 get_wm() {
+    local choice cmd args
     cmd=(dialog --radiolist "Select WM/DE" 20 40 15)
     args=(1 "i3-gaps" off
         2 "KDE plasma" off
         3 "XFCE 4" off
     4 "No DE/WM" on)
-    local choice
     choice=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
     case $choice in
-        1) WM="i3-gaps" ;;
-        2) WM="plasma" ;;
-        3) WM="xfce" ;;
+        1) wm="i3-gaps" ;;
+        2) wm="plasma" ;;
+        3) wm="xfce" ;;
     esac
 }
 
 # Ask for some additional popular packages
 get_pkgs() {
+    local choice choices cmd args i
     cmd=(dialog --separate-output --checklist "Select additional packages:" 10 40 7)
     args=(1 "base-devel" off
         2 "Intel Ucode" off
@@ -154,7 +151,6 @@ get_pkgs() {
         5 "AlsaAudio" off
         6 "NeoVim" off
     7 "OpenSSH" off)
-    local choice
     choices=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
     for i in $choices; do
@@ -179,6 +175,7 @@ add_pkg() {
 get_drive() {
     lsblk
     echo
+    local drives numDrives choice
     drives=$(find /dev/sd*[a-z] | sort)
     numDrives=$(echo "$drives" | wc -w)
     
@@ -200,7 +197,7 @@ get_drive() {
     
 }
 verify() {
-    dialog --title "FINAL CONFIRMATION" --yesno "Username: $uName\nHostname: $hostname\nDE/WM: $WM\nPackages: ${pkgs[*]}\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
+    dialog --title "FINAL CONFIRMATION" --yesno "Username: $uName\nHostname: $hostname\nDE/WM: $wm\nPackages: ${pkgs[*]}\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
     clear
 }
 # 1=bootloader, 2=swap, 3=root, 4=home
@@ -250,12 +247,13 @@ mkpart() {
 jumpChroot() {
     # Move errors to the new arch installation
     mv "$errorfile" /mnt/"$errorfile"
-    errorfile=/mnt/"$errorfile"
-    ( set -o posix ; set ) > /mnt/info
-    wget -O /mnt/setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup
-    wget -O /mnt/sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/develop/sharedfuncs
+    ( set -o posix ; set ) | grep -Ev '^([A-Z]|.$)' > /mnt/info
+    cp setup /mnt/setup
+    cp sharedfuncs /mnt/sharedfuncs
+    #wget -O /mnt/setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup
+    #wget -O /mnt/sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/develop/sharedfuncs
     chmod 755 /mnt/setup
-
+    
     arch-chroot /mnt /bin/bash <<"EOF"
 ./setup
 EOF
@@ -268,18 +266,18 @@ arch_install() {
 }
 # Controls where all the text goes
 out() {
-    local logError="$1"
+    local logError="$1" lines
     shift
     if $verbose && $logError; then
         echo "COMMAND: $@" >>$errorfile
-        local lines="$(wc -l < $errorfile)"
+        lines="$(wc -l < $errorfile)"
         "$@" 2>>$errorfile
         [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
         elif $verbose && [ "$logError" == false ]; then
         "$@"
         elif [ $verbose == false ] && $logError; then
         echo "COMMAND: $@" >>$errorfile
-        local lines="$(wc -l < $errorfile)"
+        lines="$(wc -l < $errorfile)"
         "$@" 1>/dev/null 2>>$errorfile
         [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
     else
@@ -287,11 +285,11 @@ out() {
     fi
 }
 source sharedfuncs
-
+# Remove old error file
+rm -f "$errorfile"
 read_arguments "$@"
 prompt "Running in non chrooted mode!" green
 system_check
-rm -f "$errorfile"
 installReqs
 get_config
 get_wm
