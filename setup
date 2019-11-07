@@ -1,5 +1,6 @@
 #!/bin/bash
 # Sets up the system
+# shellcheck disable=SC2154
 
 user_setup() {
     prompt "Setting up the user $uName..." yellow
@@ -8,6 +9,7 @@ user_setup() {
     echo "$uName:$userPass" | chpasswd
     prompt "Finished setting up the user ${uName}!" green
 }
+
 system_setup() {
     prompt "Setting up the system..." yellow
     out true pacman -S --noconfirm --needed networkmanager
@@ -24,6 +26,7 @@ system_setup() {
     echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
     prompt "Finished setting up the system!" green
 }
+
 grub_setup() {
     prompt "Downloading GRUB...." yellow
     out true pacman -S --noconfirm grub
@@ -47,58 +50,66 @@ grub_setup() {
     umount "$bl"
     prompt "Finished configuring GRUB!" green
 }
-install_pkgs(){
-    prompt "Downloading additional packages..." yellow
-    pacman -S --noconfirm --needed "${pkgs[@]}"
-    prompt "Finished downloading additional packages!" green
+
+# Downloads packages not already installed without asking for confirmation
+# 1: Name
+# @: Packages to install
+pacman_install() {
+    pkgName="$1"
+    shift
+    prompt "Downloading $pkgName...." yellow
+    shift
+    out true pacman -S --noconfim --needed "$@"
+    prompt "Finished downloading $pkgName!" Green
 }
+
 wm_setup() {
     userpath=/home/"$uName"/
-    
+
     # Load X resources
     echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
-    
-    prompt "Downloading WM/DE..." yellow
+
     case "$WM" in
-        i3-gaps)
-            out true pacman -S --needed --noconfirm i3-gaps rxvt-unicode
-            echo "exec i3" >>"$userpath".xinitrc
+    i3-gaps)
+        pacman_install "WM/DE" i3-gaps rxvt-unicode
+        echo "exec i3" >>"$userpath".xinitrc
         ;;
-        plasma)
-            out true pacman -S --needed --noconfirm plasma
-            echo "exec startplasma-x11" >>"$userpath".xinitrc
+    plasma)
+        pacman_install "WM/DE" plasma
+        echo "exec startplasma-x11" >>"$userpath".xinitrc
         ;;
-        xfce)
-            out true pacman -S --needed --noconfirm xfce4
-            echo "exec startxfce4" >>"$userpath".xinitrc
+    xfce)
+        pacman_install "WM/DE" xfce4
+        echo "exec startxfce4" >>"$userpath".xinitrc
         ;;
     esac
-    prompt "Finished downloading WM/DE!" green
-    
+
     # Start X server on login if not already running
     printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x Xorg >/dev/null && exec startx' >"$userpath".bash_profile
 }
 
+# shellcheck disable=SC2086
 # Controls where all the text goes
 out() {
     local logError="$1" lines
     shift
     if $verbose && $logError; then
-        echo "COMMAND: $@" >>$errorfile
-        lines="$(wc -l < $errorfile)"
+        echo "COMMAND: $*" >>$errorfile
+        lines="$(wc -l <$errorfile)"
         "$@" 2>>$errorfile
-        [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
-        elif $verbose && [ "$logError" == false ]; then
+        [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
+    elif $verbose && [ "$logError" == false ]; then
         "$@"
-        elif [ $verbose == false ] && $logError; then
-        echo "COMMAND: $@" >>$errorfile
-        lines="$(wc -l < $errorfile)"
+    elif [ $verbose == false ] && $logError; then
+        echo "COMMAND: $*" >>$errorfile
+        lines="$(wc -l <$errorfile)"
         "$@" 1>/dev/null 2>>$errorfile
-        [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
+        [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
     else
         "$@" >/dev/null 2>&1
     fi
 }
+
 # Source settings written by install
 # shellcheck disable=SC1091
 source info
@@ -107,7 +118,7 @@ prompt "Running in chrooted mode!" green
 user_setup
 system_setup
 grub_setup
-install_pkgs
+pacman_install "additional required packages" "${pkgs[@]}"
 if [ -n "$WM" ]; then
     wm_setup
 fi

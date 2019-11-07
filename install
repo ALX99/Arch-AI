@@ -6,85 +6,84 @@ errorfile="err.txt"
 
 swapP="+1G"
 rootP="+11G"
+# Packages that will be installed on the system no matter what
 pkgs=(xorg-server xorg-xinit xorg-xrandr)
+# Required packages to run this script
 reqs=(dialog reflector dosfstools fzf arch-install-scripts)
 isUEFI=false
 
 read_arguments() {
-    OPTIONS=v
-    LONGOPTS=verbose
-    
-    PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
-    eval set -- "$PARSED"
     verbose=false
-    while true; do
+    while (("$#")); do
         case "$1" in
-            -v | --verbose)
-                verbose=true
-                shift
+        -v | --verbose)
+            verbose=true
+            shift
             ;;
-            --)
-                shift
-                break
+        --) # end argument parsing
+            shift
+            break
             ;;
-            *)
-                exit 1
+        *)
+            echo "Error: Unsupported flag $1" >&2
+            exit 1
             ;;
         esac
     done
 }
+
 system_check() {
     local gpus gpu
     if [ $EUID -ne 0 ]; then
         prompt "This script must be run as root" red
         exit 1
     fi
-    
+
     prompt "Checking for internet connection..." yellow
     ping -q -c 1 -W 1 google.com 1>/dev/null || (prompt "No network connection found!" red && exit 1)
     prompt "Internet connection found!" green
-    
+
     prompt "Updating the package database, please be patient..." yellow
     out true "Pacman" pacman -Sy
     prompt "Updated the package database!" green
-    
+
     prompt "Checking for UEFI..." yellow
     if [ "$(ls -A /sys/firmware/efi/efivars/ 2>/dev/null)" ]; then
         isUEFI=true
         prompt "Found UEFI!" green
     fi
-    
+
     prompt "Identifying GPU drivers..." yellow
-    shopt -s nocasematch
     gpus=$(lspci | grep -e VGA -e 3D)
     for gpu in $gpus; do
         case "$gpu" in
-            *"intel"*)
-                prompt "Intel GPU found!" green
-                add_pkg xf86-video-intel
-                add_pkg mesa
-                add_pkg vulkan-intel
-                # HW acceleration
-                add_pkg intel-media-driver
-                add_pkg libva-intel-driver
+        *"intel"*)
+            prompt "Intel GPU found!" green
+            add_pkg xf86-video-intel
+            add_pkg mesa
+            add_pkg vulkan-intel
+            # HW acceleration
+            add_pkg intel-media-driver
+            add_pkg libva-intel-driver
             ;;
-            *"amd"*)
-                prompt "AMD GPU found!" green
-                add_pkg xf86-video-amdgpu
-                add_pkg mesa
-                add_pkg vulkan-radeon
-                # HW acceleration
-                add_pkg libva-mesa-driver
-                add_pkg libva-vdpau-driver
+        *"amd"*)
+            prompt "AMD GPU found!" green
+            add_pkg xf86-video-amdgpu
+            add_pkg mesa
+            add_pkg vulkan-radeon
+            # HW acceleration
+            add_pkg libva-mesa-driver
+            add_pkg libva-vdpau-driver
             ;;
-            *"nvidia"*)
-                prompt "Nvidia GPU found!" green
-                add_pkg nvidia
-                add_pkg nvidia-utils
+        *"nvidia"*)
+            prompt "Nvidia GPU found!" green
+            add_pkg nvidia
+            add_pkg nvidia-utils
             ;;
         esac
     done
 }
+
 # Installs missing requirements for this script (if any)
 installReqs() {
     grep -q Reflector /etc/pacman.d/mirrorlist
@@ -93,11 +92,12 @@ installReqs() {
         reflector --latest 200 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
         prompt "Done generating mirrors" green
     fi
-    
+
     prompt "Installing additional packages if required..." yellow
     out true pacman -S "${reqs[@]}" --needed --noconfirm
 }
-# Get username, hostname, password
+
+# Get username, hostname, password, locale
 get_config() {
     local locale_list pass1 pass2
     locale_list="$(grep UTF-8 /etc/locale.gen | sed 's/\..*$//' | sed '/@/d' | awk '{print $1}' | uniq | sed 's/#//g')"
@@ -106,17 +106,18 @@ get_config() {
     locale="$locale".UTF-8
     hostname=$(dialog --inputbox "What hostname would you like?" 8 40 --output-fd 1)
     uName=$(dialog --inputbox "What username would you like?" 8 40 --output-fd 1)
-    
+
     if [[ -z "$uName" || -z "$hostname" ]]; then
         prompt "Username or hostname left blank, try again." red
         get_config
     fi
-    
+
     while true; do
         pass1=$(dialog --passwordbox "What password would you like for ${uName}?" 8 40 --output-fd 1)
         pass2=$(dialog --passwordbox "Confirm password for $uName" 8 40 --output-fd 1)
         if [ "$pass1" == "$pass2" ]; then
-            # shellcheck disable=SC2034  # userPass is written to info file
+            # userPass is written to info file
+            # shellcheck disable=SC2034
             userPass="$pass1"
             break
         else
@@ -124,19 +125,20 @@ get_config() {
         fi
     done
 }
+
 get_wm() {
     local choice cmd args
     cmd=(dialog --radiolist "Select WM/DE" 20 40 15)
     args=(1 "i3-gaps" off
         2 "KDE plasma" off
         3 "XFCE 4" off
-    4 "No DE/WM" on)
+        4 "No DE/WM" on)
     choice=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
     case $choice in
-        1) wm="i3-gaps" ;;
-        2) wm="plasma" ;;
-        3) wm="xfce" ;;
+    1) wm="i3-gaps" ;;
+    2) wm="plasma" ;;
+    3) wm="xfce" ;;
     esac
 }
 
@@ -150,27 +152,29 @@ get_pkgs() {
         4 "PulseAudio" off
         5 "AlsaAudio" off
         6 "NeoVim" off
-    7 "OpenSSH" off)
+        7 "OpenSSH" off)
     choices=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
     for i in $choices; do
         case $i in
-            1) add_pkg base-devel ;;
-            2) add_pkg intel-ucode ;;
-            3) add_pkg amd-ucode ;;
-            4) add_pkg pulseaudio ;;
-            5) add_pkg alsa-utils ;;
-            6) add_pkg neovim ;;
-            7) add_pkg openssh ;;
+        1) add_pkg base-devel ;;
+        2) add_pkg intel-ucode ;;
+        3) add_pkg amd-ucode ;;
+        4) add_pkg pulseaudio ;;
+        5) add_pkg alsa-utils ;;
+        6) add_pkg neovim ;;
+        7) add_pkg openssh ;;
         esac
     done
 }
+
 add_pkg() {
     # Add package to list if not already there
     if [[ "$pkgs" != *$1* ]]; then
         pkgs+=("$1")
     fi
 }
+
 # Asks which drive arch should be installed to
 get_drive() {
     lsblk
@@ -178,14 +182,14 @@ get_drive() {
     local drives numDrives choice
     drives=$(find /dev/sd*[a-z] | sort)
     numDrives=$(echo "$drives" | wc -w)
-    
+
     echo "$drives" | awk '{print NR,$0}'
     while [[ "$choice" -le 0 || "$choice" -gt "$numDrives" ]]; do
         read -r -p "Which drive would you like to install Arch on [1-$numDrives]: " choice
     done
-    
+
     fs=$(echo "$drives" | sed -n "$choice"p)
-    
+
     if [ -z "$fs" ]; then
         prompt "Something went wrong!" red
         exit 1
@@ -194,12 +198,14 @@ get_drive() {
     swap="${fs}"2
     root="${fs}"3
     home="${fs}"4
-    
+
 }
+
 verify() {
     dialog --title "FINAL CONFIRMATION" --yesno "Username: $uName\nHostname: $hostname\nDE/WM: $wm\nPackages: ${pkgs[*]}\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
     clear
 }
+
 # 1=bootloader, 2=swap, 3=root, 4=home
 format_fs() {
     while df | grep -q "$fs"; do
@@ -208,12 +214,12 @@ format_fs() {
             out true umount "$partition"
         done
     done
-    
+
     while swapon --show | grep -q "$fs"; do
         prompt "$fs seems to have swap partition, trying to disable it!" red
         swapoff "$(swapon --show | grep "$fs" | awk '{ print $1}')"
     done
-    
+
     prompt "Creating partitions..." yellow
     (
         echo g
@@ -224,19 +230,21 @@ format_fs() {
         echo p
         echo w
     ) | out true fdisk "$fs"
-    
+
     prompt "Formatting partitions..." yellow
     out true mkfs.fat -F32 "$bl"
     out true mkswap "$swap"
     out true swapon "$swap"
     out true mkfs.ext4 -F "$root"
     out true mkfs.ext4 -F "$home"
-    
+
     mount "$root" /mnt
     mkdir /mnt/home
     mount "$home" /mnt/home
 }
+
 # sequence for creating a new partition
+# 1: size of partition
 mkpart() {
     echo n
     echo
@@ -244,16 +252,23 @@ mkpart() {
     echo y # in case of 'already contains signature'
     echo "$1"
 }
+
+# chroot into the new arch installation
 jumpChroot() {
     # Move errors to the new arch installation
     mv "$errorfile" /mnt/"$errorfile"
-    ( set -o posix ; set ) | grep -Ev '^([A-Z]|.$)' > /mnt/info
+    (
+        set -o posix
+        set
+    ) | grep -Ev '^([A-Z]|.$)' >/mnt/info
+    # TODO
     cp setup /mnt/setup
     cp sharedfuncs /mnt/sharedfuncs
     #wget -O /mnt/setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup
     #wget -O /mnt/sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/develop/sharedfuncs
     chmod 755 /mnt/setup
-    
+
+    # Launch the setup script
     arch-chroot /mnt /bin/bash <<"EOF"
 ./setup
 EOF
@@ -264,22 +279,23 @@ arch_install() {
     genfstab -U /mnt >/mnt/etc/fstab
     prompt "Finished pacstrapping packages" green
 }
+
 # Controls where all the text goes
 out() {
     local logError="$1" lines
     shift
     if $verbose && $logError; then
-        echo "COMMAND: $@" >>$errorfile
-        lines="$(wc -l < $errorfile)"
+        echo "COMMAND: $*" >>$errorfile
+        lines="$(wc -l <$errorfile)"
         "$@" 2>>$errorfile
-        [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
-        elif $verbose && [ "$logError" == false ]; then
+        [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
+    elif $verbose && [ "$logError" == false ]; then
         "$@"
-        elif [ $verbose == false ] && $logError; then
-        echo "COMMAND: $@" >>$errorfile
-        lines="$(wc -l < $errorfile)"
+    elif [ $verbose == false ] && $logError; then
+        echo "COMMAND: $*" >>$errorfile
+        lines="$(wc -l <$errorfile)"
         "$@" 1>/dev/null 2>>$errorfile
-        [ "$lines" == "$(wc -l < $errorfile)" ] && sed -i '$ d' $errorfile
+        [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
     else
         "$@" >/dev/null 2>&1
     fi
