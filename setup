@@ -70,15 +70,15 @@ wm_setup() {
     echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
 
     case "$WM" in
-    i3-gaps)
+    "i3-gaps")
         pacman_install "WM/DE" i3-gaps rxvt-unicode
         echo "exec i3" >>"$userpath".xinitrc
         ;;
-    plasma)
+    "KDE Plasma")
         pacman_install "WM/DE" plasma
         echo "exec startplasma-x11" >>"$userpath".xinitrc
         ;;
-    xfce)
+    "XFCE 4")
         pacman_install "WM/DE" xfce4
         echo "exec startxfce4" >>"$userpath".xinitrc
         ;;

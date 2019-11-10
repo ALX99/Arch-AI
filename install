@@ -85,11 +85,12 @@ system_check() {
 }
 
 # Installs missing requirements for this script (if any)
+# and updates the mirrorlist if needed
 installReqs() {
     grep -q Reflector /etc/pacman.d/mirrorlist
     if [ ! $? ]; then
         prompt "Generating pacman mirrors, please be patient..." yellow
-        reflector --latest 200 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+        reflector --latest 200 --sort rate --save /etc/pacman.d/mirrorlist
         prompt "Done generating mirrors" green
     fi
 
@@ -100,46 +101,43 @@ installReqs() {
 # Get username, hostname, password, locale
 get_config() {
     local locale_list pass1 pass2
-    locale_list="$(grep UTF-8 /etc/locale.gen | sed 's/\..*$//' | sed '/@/d' | awk '{print $1}' | uniq | sed 's/#//g')"
-    prompt "Which locale do you want?" blue
-    locale=$(echo "$locale_list" | fzf --height $(expr $(tput lines) - 1))
-    locale="$locale".UTF-8
-    hostname=$(dialog --inputbox "What hostname would you like?" 8 40 --output-fd 1)
-    uName=$(dialog --inputbox "What username would you like?" 8 40 --output-fd 1)
-
-    if [[ -z "$uName" || -z "$hostname" ]]; then
+    while [[ -z $locale ]]; do
+        locale_list="$(grep UTF-8 /etc/locale.gen | awk '{print $1}' | cut -c 2-)"
+        prompt "Which locale would you like?" blue
+        locale=$(echo "$locale_list" | fzf --border --height $(expr $(tput lines) - 1))
+    done
+    while true; do
+        iprompt "What hostname would you like?" false
+        hostname="$Reply"
+        iprompt "What username would you like?" false
+        uName="$Reply"
+        if [[ -n "$uName" && -n "$hostname" ]]; then
+            break
+        fi
         prompt "Username or hostname left blank, try again." red
-        get_config
-    fi
+    done
 
     while true; do
-        pass1=$(dialog --passwordbox "What password would you like for ${uName}?" 8 40 --output-fd 1)
-        pass2=$(dialog --passwordbox "Confirm password for $uName" 8 40 --output-fd 1)
+        iprompt "What password would you like for ${uName}?" true
+        pass1="$Reply"
+        echo
+        iprompt "Confirm password for $uName" true
+        pass2="$Reply"
+        echo
         if [ "$pass1" == "$pass2" ]; then
             # userPass is written to info file
             # shellcheck disable=SC2034
             userPass="$pass1"
             break
-        else
-            dialog --pause "Passwords do not match, try again." 8 40 3
         fi
+        prompt "Passwords do not match, try again." red
     done
 }
 
 get_wm() {
     local choice cmd args
-    cmd=(dialog --radiolist "Select WM/DE" 20 40 15)
-    args=(1 "i3-gaps" off
-        2 "KDE plasma" off
-        3 "XFCE 4" off
-        4 "No DE/WM" on)
-    choice=$("${cmd[@]}" "${args[@]}" --output-fd 1)
-    clear
-    case $choice in
-    1) wm="i3-gaps" ;;
-    2) wm="plasma" ;;
-    3) wm="xfce" ;;
-    esac
+    prompt 'Choose a WM/DE' blue
+    wm="$(printf "KDE Plasma\nXFCE 4\ni3-gaps\nNone" | fzf --border --height $(expr $(tput lines) - 1))"
 }
 
 # Ask for some additional popular packages
@@ -170,7 +168,7 @@ get_pkgs() {
 
 add_pkg() {
     # Add package to list if not already there
-    if [[ "$pkgs" != *$1* ]]; then
+    if [[ $pkgs != *$1* ]]; then
         pkgs+=("$1")
     fi
 }
@@ -300,19 +298,35 @@ out() {
         "$@" >/dev/null 2>&1
     fi
 }
-source sharedfuncs
-# Remove old error file
-rm -f "$errorfile"
-read_arguments "$@"
-prompt "Running in non chrooted mode!" green
-system_check
-installReqs
-get_config
-get_wm
-get_pkgs
-get_drive
-verify
-format_fs
-arch_install
-jumpChroot
-prompt "Arch Linux successfully installed!" green
+# shellcheck disable=SC2178
+# shellcheck disable=SC2179
+# shellcheck disable=SC2128
+# Interactive prompt
+# 1: message
+# 2: silent? (true, false)
+iprompt() {
+    printf "\033[1;34m%s: \033[0m" "$1"
+    cmd="read -r"
+    $2 && cmd+="s"
+    $cmd Reply
+}
+main() {
+    source sharedfuncs
+    # Remove old error file
+    rm -f "$errorfile"
+    read_arguments "$@"
+    prompt "Running in non chrooted mode!" green
+    system_check
+    installReqs
+    get_config
+    get_wm
+    get_pkgs
+    get_drive
+    verify
+    format_fs
+    arch_install
+    jumpChroot
+    prompt "Arch Linux successfully installed!" green
+}
+
+main "$@"
