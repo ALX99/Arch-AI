@@ -6,60 +6,73 @@ user_setup() {
     prompt "Setting up the user $uName..." yellow
     useradd -m -G wheel "$uName"
     pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers.d/"$uName"
-    echo "$uName:$userPass" | chpasswd
+    echo "$uName:$userPass" | out chpasswd
     prompt "Finished setting up the user ${uName}!" green
+
+    prompt "Setting the root password..." yellow
+    echo "root:$rootPW" | out chpasswd
+    prompt "Set the root password!" green
+
 }
 
 system_setup() {
+    local timeZ
+
     prompt "Setting up the system..." yellow
-    out true pacman -S --noconfirm --needed networkmanager
-    out true systemctl enable NetworkManager
+    out pacman -S --noconfirm --needed networkmanager
+    out systemctl enable NetworkManager
+
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
-    out true ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
-    out true timedatectl set-timezone "$timeZ"
+    out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
+    out timedatectl set-timezone "$timeZ"
+    # Enable Network Time Protocol (NPT) synchronization
     timedatectl set-ntp true
+    # Write the current software clock time to thehardware clock
     hwclock --systohc
     sed -i "/$locale/s/^#//g" /etc/locale.gen
     localectl set-locale LANG="$locale"
-    out true locale-gen
-    echo "$hostname" >/etc/hostname
-    echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
+    out locale-gen
+
+    out echo "$hostname" >/etc/hostname
+    out echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
     prompt "Finished setting up the system!" green
 }
 
 grub_setup() {
     prompt "Downloading GRUB...." yellow
-    out true pacman -S --noconfirm grub
+    out pacman -S --noconfirm grub
     if $isUEFI; then
-        prompt "Installing and configuring GRUB for UEFI..." yellow
-        mkdir /boot/efi
-        mount "$bl" /boot/efi
-        out true pacman -S --noconfirm --needed efibootmgr
-        out true grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
-        out true grub-mkconfig -o /boot/grub/grub.cfg
-        mkdir /boot/efi/EFI/BOOT
-        cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
-        printf "bcf boot add 1 fs0:\\\EFI\\GRUB\\grubx64.efi\nexit" >/boot/efi/startup.nsh
+        prompt "Downloading additional dependencies for GRUB with UEFI..." yellow
+        out pacman -S --noconfirm --needed efibootmgr
+        prompt "Installing and configuring GRUB for UEFI, this might take a while..." yellow
+        out mkdir /boot/efi
+        out mount "$bl" /boot/efi
+        out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
+        out grub-mkconfig -o /boot/grub/grub.cfg
+        # Improve the chances of EFI recognizing the OS
+        out mkdir /boot/efi/EFI/BOOT
+        out cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+        out printf "bcf boot add 1 FS0:\\\EFI\\GRUB\\grubx64.efi\nexit" >/boot/efi/startup.nsh
     else
         # This hasn't been tested
-        prompt "Installing and configuring GRUB for BIOS..." yellow
-        mount "$bl" /boot/
-        grub-install --target=i386-pc "$fs"
-        out true grub-mkconfig -o /boot/grub/grub.cfg
+        prompt "Installing and configuring GRUB for BIOS, this might take a while..." yellow
+        out mount "$bl" /boot/
+        out grub-install --target=i386-pc "$fs"
+        out grub-mkconfig -o /boot/grub/grub.cfg
     fi
     umount "$bl"
     prompt "Finished configuring GRUB!" green
 }
 
 # Downloads packages not already installed without asking for confirmation
-# 1: Name
 # @: Packages to install
+# 1: Name
 pacman_install() {
     pkgName="$1"
     shift
     prompt "Downloading $pkgName...." yellow
     shift
-    out true pacman -S --noconfim --needed "$@"
+    out pacman -S --noconfirm --needed "$@"
     prompt "Finished downloading $pkgName!" Green
 }
 
@@ -69,7 +82,7 @@ wm_setup() {
     # Load X resources
     echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
 
-    case "$WM" in
+    case "$wm" in
     "i3-gaps")
         pacman_install "WM/DE" i3-gaps rxvt-unicode
         echo "exec i3" >>"$userpath".xinitrc
@@ -89,25 +102,23 @@ wm_setup() {
 }
 
 # shellcheck disable=SC2086
-# Controls where all the text goes
+# out logs the errors to the errorfile
+# and then echos output of commands
+# if verbose is true
 out() {
-    local logError="$1" lines
-    shift
-    if $verbose && $logError; then
-        echo "COMMAND: $*" >>$errorfile
-        lines="$(wc -l <$errorfile)"
+    local lines
+    echo "COMMAND: $*" >>$errorfile
+    # TODO I have no clue why I wrote this
+    lines="$(wc -l <$errorfile)"
+
+    if $verbose; then
         "$@" 2>>$errorfile
-        [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
-    elif $verbose && [ "$logError" == false ]; then
-        "$@"
-    elif [ $verbose == false ] && $logError; then
-        echo "COMMAND: $*" >>$errorfile
-        lines="$(wc -l <$errorfile)"
-        "$@" 1>/dev/null 2>>$errorfile
-        [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
     else
-        "$@" >/dev/null 2>&1
+        "$@" 1>/dev/null 2>>$errorfile
     fi
+
+    # TODO I have no clue why I wrote this
+    [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
 }
 
 # Source settings written by install
@@ -119,6 +130,11 @@ user_setup
 system_setup
 grub_setup
 pacman_install "additional required packages" "${pkgs[@]}"
-if [ -n "$WM" ]; then
-    wm_setup
-fi
+# Setup wm if WM isn't empty
+[ -n "$wm" ] && wm_setup
+
+# Move the errorfile to the userfolder
+mv "$errorfile" /home/"$uName"/
+# Force the user to read through the errorlog to make
+# sure some command(s) hasn't gone terribly wrong
+less </home/"$uName"/"$errorfile"

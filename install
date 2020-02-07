@@ -4,8 +4,6 @@
 # Keep this in mind if wanting to change this file for whatever reason
 errorfile="err.txt"
 
-swapP="+1G"
-rootP="+11G"
 # Packages that will be installed on the system no matter what
 pkgs=(xorg-server xorg-xinit xorg-xrandr)
 # Required packages to run this script
@@ -44,7 +42,7 @@ system_check() {
     prompt "Internet connection found!" green
 
     prompt "Updating the package database, please be patient..." yellow
-    out true "Pacman" pacman -Sy
+    out pacman -Sy
     prompt "Updated the package database!" green
 
     prompt "Checking for UEFI..." yellow
@@ -54,7 +52,7 @@ system_check() {
     fi
 
     prompt "Identifying GPU drivers..." yellow
-    gpus=$(lspci | grep -e VGA -e 3D)
+    gpus=$(lspci | grep -e VGA -e 3D | tr '[:upper:]' '[:lower:]')
     for gpu in $gpus; do
         case "$gpu" in
         *"intel"*)
@@ -87,22 +85,25 @@ system_check() {
 # Installs missing requirements for this script (if any)
 # and updates the mirrorlist if needed
 installReqs() {
-    grep -q Reflector /etc/pacman.d/mirrorlist
-    if [ ! $? ]; then
+    if ! grep -q Reflector /etc/pacman.d/mirrorlist; then
         prompt "Generating pacman mirrors, please be patient..." yellow
         reflector --latest 200 --sort rate --save /etc/pacman.d/mirrorlist
         prompt "Done generating mirrors" green
     fi
 
     prompt "Installing additional packages if required..." yellow
-    out true pacman -S "${reqs[@]}" --needed --noconfirm
+    out pacman -S "${reqs[@]}" --needed --noconfirm
 }
 
 # Get username, hostname, password, locale
 get_config() {
-    local locale_list pass1 pass2
+    local locale_list pass1 pass2 root1 root2
+
     while [[ -z $locale ]]; do
         locale_list="$(grep UTF-8 /etc/locale.gen | awk '{print $1}' | cut -c 2-)"
+        # TODO, the US.UTF-8 option is uncommented in the Arch Linux
+        # live ISO, so for now I'll add it as an option manually
+        locale_list+="$(printf "\nen.US.UTF-8")"
         prompt "Which locale would you like?" blue
         locale=$(echo "$locale_list" | fzf --border --height $(expr $(tput lines) - 1))
     done
@@ -111,12 +112,13 @@ get_config() {
         hostname="$Reply"
         iprompt "What username would you like?" false
         uName="$Reply"
-        if [[ -n "$uName" && -n "$hostname" ]]; then
+        if [[ -n $uName && -n $hostname ]]; then
             break
         fi
-        prompt "Username or hostname left blank, try again." red
+        prompt "Username, hostname or the root password was left blank, try again." red
     done
 
+    # Get user password
     while true; do
         iprompt "What password would you like for ${uName}?" true
         pass1="$Reply"
@@ -128,6 +130,23 @@ get_config() {
             # userPass is written to info file
             # shellcheck disable=SC2034
             userPass="$pass1"
+            break
+        fi
+        prompt "Passwords do not match, try again." red
+    done
+
+    # Get root password
+    while true; do
+        iprompt "What password would you like for the root user?" true
+        root1="$Reply"
+        echo
+        iprompt "Confirm password for the root user" true
+        root2="$Reply"
+        echo
+        if [ "$root1" == "$root2" ]; then
+            # userPass is written to info file
+            # shellcheck disable=SC2034
+            rootPW="$root1"
             break
         fi
         prompt "Passwords do not match, try again." red
@@ -186,12 +205,40 @@ get_drive() {
         read -r -p "Which drive would you like to install Arch on [1-$numDrives]: " choice
     done
 
+    # fs contains the base path to the drive
+    # such as /dev/sda
     fs=$(echo "$drives" | sed -n "$choice"p)
 
     if [ -z "$fs" ]; then
         prompt "Something went wrong!" red
         exit 1
     fi
+
+    local re='^[0-9]+$'
+
+    while ! [[ $RootSize =~ $re ]]; do
+        read -r -p "How big should the root partition be [GB]:" RootSize
+    done
+
+    while ! [[ $SwapSize =~ $re ]]; do
+        read -r -p "How big should the swap partition be [GB]:" SwapSize
+    done
+
+    while ! [[ $HomeSize =~ $re ]]; do
+        prompt "Type 0 to fill the remaining space on the disk selected" yellow
+        read -r -p "Type out the size of the home partition [GB]:" HomeSize
+    done
+
+    # Set formatting of the variables
+    # so that fdisk can use them
+    RootSize="+${RootSize}G"
+    SwapSize="+${SwapSize}G"
+    if [ "$HomeSize" != "0" ]; then
+        HomeSize="+${HomeSize}G"
+    fi
+
+    # Setup paths to the different
+    # partitions on the hard drive
     bl="${fs}"1
     swap="${fs}"2
     root="${fs}"3
@@ -200,41 +247,43 @@ get_drive() {
 }
 
 verify() {
-    dialog --title "FINAL CONFIRMATION" --yesno "Username: $uName\nHostname: $hostname\nDE/WM: $wm\nPackages: ${pkgs[*]}\nLocale: $locale\nRoot partition: $rootP\nSwap partition: $swapP\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
+    dialog --title "FINAL CONFIRMATION" --yesno "Username: $uName\nHostname: $hostname\nDE/WM: $wm\nPackages: ${pkgs[*]}\nLocale: $locale\nRoot partition: $RootSize\nSwap partition: $SwapSize\nHome partition: $HomeSize\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
     clear
 }
 
 # 1=bootloader, 2=swap, 3=root, 4=home
 format_fs() {
-    while df | grep -q "$fs"; do
-        prompt "$fs seems to be mounted, trying to unmount!" red
-        find "$fs"[1-9] | while read -r partition; do
-            out true umount "$partition"
-        done
-    done
-
     while swapon --show | grep -q "$fs"; do
         prompt "$fs seems to have swap partition, trying to disable it!" red
         swapoff "$(swapon --show | grep "$fs" | awk '{ print $1}')"
     done
 
+    while df | grep -q "$fs"; do
+        prompt "$fs seems to have some partion(s) mounted, trying to unmount!" red
+        ls "$fs"?* | xargs -n1 umount -l
+        sleep 1
+    done
+
     prompt "Creating partitions..." yellow
     (
+        # Create new GPT partition table
+        # TODO, for non UEFI installations maybe a DOS partition table should be used?
         echo g
         ($isUEFI && mkpart "+512M") || mkpart "+200M"
-        mkpart "$swapP"
-        mkpart "$rootP"
-        mkpart
+        mkpart "$SwapSize"
+        mkpart "$RootSize"
+        # Either fill the rest of the drive, or the chosen amount
+        ([ "$HomeSize" == "0" ] && mkpart) || mkpart "$HomeSize"
         echo p
         echo w
-    ) | out true fdisk "$fs"
+    ) | out fdisk "$fs"
 
     prompt "Formatting partitions..." yellow
-    out true mkfs.fat -F32 "$bl"
-    out true mkswap "$swap"
-    out true swapon "$swap"
-    out true mkfs.ext4 -F "$root"
-    out true mkfs.ext4 -F "$home"
+    out mkfs.fat -F32 "$bl"
+    out mkswap "$swap"
+    out swapon "$swap"
+    out mkfs.ext4 -F "$root"
+    out mkfs.ext4 -F "$home"
 
     mount "$root" /mnt
     mkdir /mnt/home
@@ -247,7 +296,10 @@ mkpart() {
     echo n
     echo
     echo
-    echo y # in case of 'already contains signature'
+    # In case we get the 'already contains signature' message
+    # we need to send 'y'. If this message doesn't show
+    # sending 'y' won't have any affect
+    echo y
     echo "$1"
 }
 
@@ -255,11 +307,15 @@ mkpart() {
 jumpChroot() {
     # Move errors to the new arch installation
     mv "$errorfile" /mnt/"$errorfile"
+    # export all lowercase variables
+    # here to a special info file
     (
         set -o posix
         set
     ) | grep -Ev '^([A-Z]|.$)' >/mnt/info
-    # TODO
+
+    # TODO we will fetch these files
+    # from github when everything works
     cp setup /mnt/setup
     cp sharedfuncs /mnt/sharedfuncs
     #wget -O /mnt/setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup
@@ -278,25 +334,23 @@ arch_install() {
     prompt "Finished pacstrapping packages" green
 }
 
-# Controls where all the text goes
+# out logs the errors to the errorfile
+# and then echos output of commands
+# if verbose is true
 out() {
-    local logError="$1" lines
-    shift
-    if $verbose && $logError; then
-        echo "COMMAND: $*" >>$errorfile
-        lines="$(wc -l <$errorfile)"
+    local lines
+    echo "COMMAND: $*" >>$errorfile
+    # TODO I have no clue why I wrote this
+    lines="$(wc -l <$errorfile)"
+
+    if $verbose; then
         "$@" 2>>$errorfile
-        [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
-    elif $verbose && [ "$logError" == false ]; then
-        "$@"
-    elif [ $verbose == false ] && $logError; then
-        echo "COMMAND: $*" >>$errorfile
-        lines="$(wc -l <$errorfile)"
-        "$@" 1>/dev/null 2>>$errorfile
-        [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
     else
-        "$@" >/dev/null 2>&1
+        "$@" 1>/dev/null 2>>$errorfile
     fi
+
+    # TODO I have no clue why I wrote this
+    [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
 }
 # shellcheck disable=SC2178
 # shellcheck disable=SC2179
