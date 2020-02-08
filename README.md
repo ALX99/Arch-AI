@@ -23,13 +23,26 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - Locale configuration and generation
 - Error log
 
-### Things that are done without input
+### Things that are done without user input
 
 - Obtains fastest mirror before install
 - GPU driver detection + installation
 - Timezone + clock setup
 - GRUB installation
-- Xorg setup (No DM used)
+- yay installation
+
+#### List of packages that are always installed without asking
+
+- linux
+- linux-firmware
+- base
+- base-devel
+- xorg-server
+- xorg-xinit
+- xorg-xrandr
+- grub
+- networkmanager
+- git
 
 ## TODO
 
@@ -38,7 +51,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - Partition naming
 - Sudo configuration settings
 - Option to install a DM
-- Add option to install [yay](https://github.com/Jguer/yay)
+- ~~Install [yay](https://github.com/Jguer/yay) in setup~~
 - LUKS encryption
 - Better dialog experience
 - Option to change DNS server?

@@ -4,8 +4,10 @@
 # Keep this in mind if wanting to change this file for whatever reason
 errorfile="err.txt"
 
-# Packages that will be installed on the system no matter what
-pkgs=(xorg-server xorg-xinit xorg-xrandr)
+# Packages that will be installed on the system with pacstrap
+# the only things you are allowed to remove here would be git
+# removing other things might break the setup procedure
+pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrandr grub networkmanager git)
 # Required packages to run this script
 reqs=(dialog dosfstools fzf arch-install-scripts)
 isUEFI=false
@@ -160,19 +162,33 @@ get_wm() {
     local choice cmd args
     prompt 'Choose a WM/DE' blue
     wm="$(printf "KDE Plasma\nXFCE 4\ni3-gaps\nNone" | fzf --border --height $(expr $(tput lines) - 1))"
+
+    # Add the WM package to be packstrapped
+    case "$wm" in
+    "i3-gaps")
+        add_pkg i3-gaps
+        add_pkg rxvt-unicode
+        ;;
+    "KDE Plasma")
+        add_pkg plasma
+        ;;
+    "XFCE 4")
+        add_pkg xfce4
+        ;;
+    esac
 }
 
 # Ask for some additional popular packages
 get_pkgs() {
     local choice choices cmd args i
     cmd=(dialog --separate-output --checklist "Select additional packages:" 10 40 7)
-    args=(1 "base-devel" off
-        2 "Intel Ucode" off
-        3 "AMD Ucode" off
-        4 "PulseAudio" off
-        5 "AlsaAudio" off
-        6 "NeoVim" off
-        7 "OpenSSH" off)
+    args=(
+        1 "Intel Ucode" off
+        2 "AMD Ucode" off
+        3 "PulseAudio" off
+        4 "AlsaAudio" off
+        5 "NeoVim" off
+        6 "OpenSSH" off)
     choices=$("${cmd[@]}" "${args[@]}" --output-fd 1)
     clear
     for i in $choices; do
@@ -188,10 +204,11 @@ get_pkgs() {
     done
 }
 
+# Adds a package to be pacstrapped
 add_pkg() {
     # Add package to list if not already there
-    if [[ $pkgs != *$1* ]]; then
-        pkgs+=("$1")
+    if [[ $pacstrap != *$1* ]]; then
+        pacstrap+=("$1")
     fi
 }
 
@@ -250,7 +267,7 @@ get_drive() {
 }
 
 verify() {
-    dialog --title "FINAL CONFIRMATION" --yesno "Username: $uName\nHostname: $hostname\nDE/WM: $wm\nPackages: ${pkgs[*]}\nLocale: $locale\nRoot partition: $RootSize\nSwap partition: $SwapSize\nHome partition: $HomeSize\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
+    dialog --title "FINAL CONFIRMATION" --yesno "Username: $uName\nHostname: $hostname\nDE/WM: $wm\nPackages: ${pacstrap[*]}\nLocale: $locale\nRoot partition: $RootSize\nSwap partition: $SwapSize\nHome partition: $HomeSize\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
     clear
 }
 
@@ -332,7 +349,7 @@ EOF
 }
 arch_install() {
     prompt "Pacstrapping packages..." yellow
-    pacstrap /mnt base linux linux-firmware
+    pacstrap /mnt "${pacstrap[@]}"
     genfstab -U /mnt >/mnt/etc/fstab
     prompt "Finished pacstrapping packages" green
 }

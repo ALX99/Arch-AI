@@ -17,9 +17,7 @@ user_setup() {
 
 system_setup() {
     local timeZ
-
     prompt "Setting up the system..." yellow
-    out pacman -S --noconfirm --needed networkmanager
     out systemctl enable NetworkManager
 
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
@@ -39,8 +37,6 @@ system_setup() {
 }
 
 grub_setup() {
-    prompt "Downloading GRUB...." yellow
-    out pacman -S --noconfirm grub
     if $isUEFI; then
         prompt "Downloading additional dependencies for GRUB with UEFI..." yellow
         out pacman -S --noconfirm --needed efibootmgr
@@ -63,36 +59,30 @@ grub_setup() {
     umount "$bl"
     prompt "Finished configuring GRUB!" green
 }
-
-# Downloads packages not already installed without asking for confirmation
-# @: Packages to install
-# 1: Name
-pacman_install() {
-    pkgName="$1"
-    shift
-    prompt "Downloading $pkgName...." yellow
-    shift
-    out pacman -S --noconfirm --needed "$@"
-    prompt "Finished downloading $pkgName!" Green
+# Sets up yay
+yay_setup() {
+    userpath=/home/"$uName"/
+    cd userpath || exit
+    git clone https://aur.archlinux.org/yay.git
+    cd yay || exit
+    makepkg -si
+    cd ..
+    rm -rf yay/
+    cd /
 }
 
 wm_setup() {
-    userpath=/home/"$uName"/
-
     # Load X resources
     echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
 
     case "$wm" in
     "i3-gaps")
-        pacman_install "WM/DE" i3-gaps rxvt-unicode
         echo "exec i3" >>"$userpath".xinitrc
         ;;
     "KDE Plasma")
-        pacman_install "WM/DE" plasma
         echo "exec startplasma-x11" >>"$userpath".xinitrc
         ;;
     "XFCE 4")
-        pacman_install "WM/DE" xfce4
         echo "exec startxfce4" >>"$userpath".xinitrc
         ;;
     esac
@@ -126,7 +116,7 @@ prompt "Running in chrooted mode!" green
 user_setup
 system_setup
 grub_setup
-pacman_install "additional required packages" "${pkgs[@]}"
+yay_setup
 # Setup wm if WM isn't empty
 [ -n "$wm" ] && wm_setup
 
