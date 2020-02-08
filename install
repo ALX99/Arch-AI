@@ -7,7 +7,7 @@ errorfile="err.txt"
 # Packages that will be installed on the system no matter what
 pkgs=(xorg-server xorg-xinit xorg-xrandr)
 # Required packages to run this script
-reqs=(dialog reflector dosfstools fzf arch-install-scripts)
+reqs=(dialog dosfstools fzf arch-install-scripts)
 isUEFI=false
 
 read_arguments() {
@@ -86,7 +86,10 @@ system_check() {
 # and updates the mirrorlist if needed
 installReqs() {
     if ! grep -q Reflector /etc/pacman.d/mirrorlist; then
-        prompt "Generating pacman mirrors, please be patient..." yellow
+        prompt "Installing reflector..." yellow
+        out pacman -S reflector --needed --noconfirm
+        prompt "Done!" green
+        prompt "Generating new pacman mirrors, please be patient..." yellow
         reflector --latest 200 --sort rate --save /etc/pacman.d/mirrorlist
         prompt "Done generating mirrors" green
     fi
