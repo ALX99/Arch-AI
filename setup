@@ -63,9 +63,9 @@ grub_setup() {
 yay_setup() {
     userpath=/home/"$uName"/
     cd "$userpath" || exit
-    git clone https://aur.archlinux.org/yay.git
+    su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
     cd yay || exit
-    makepkg -si
+    su -c "makepkg -si" "$uName"
     cd ..
     rm -rf yay/
     cd /

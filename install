@@ -92,7 +92,7 @@ installReqs() {
         out pacman -S reflector --needed --noconfirm
         prompt "Done!" green
         prompt "Generating new pacman mirrors, please be patient..." yellow
-        out reflector --latest 200 --sort rate --save /etc/pacman.d/mirrorlist
+        out reflector --latest 100 --sort rate --save /etc/pacman.d/mirrorlist
         prompt "Done generating mirrors" green
     fi
 
