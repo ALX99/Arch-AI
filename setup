@@ -62,7 +62,7 @@ grub_setup() {
 # Sets up yay
 yay_setup() {
     userpath=/home/"$uName"/
-    cd userpath || exit
+    cd "$userpath" || exit
     git clone https://aur.archlinux.org/yay.git
     cd yay || exit
     makepkg -si
@@ -110,8 +110,8 @@ out() {
 
 # Source settings written by install
 # shellcheck disable=SC1091
-source info
-source sharedfuncs
+source /info
+source /sharedfuncs
 prompt "Running in chrooted mode!" green
 user_setup
 system_setup
