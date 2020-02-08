@@ -33,8 +33,8 @@ system_setup() {
     localectl set-locale LANG="$locale"
     out locale-gen
 
-    out echo "$hostname" >/etc/hostname
-    out echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
+    echo "$hostname" >/etc/hostname
+    echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
     prompt "Finished setting up the system!" green
 }
 
@@ -52,7 +52,7 @@ grub_setup() {
         # Improve the chances of EFI recognizing the OS
         out mkdir /boot/efi/EFI/BOOT
         out cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
-        out printf "bcf boot add 1 FS0:\\\EFI\\GRUB\\grubx64.efi\nexit" >/boot/efi/startup.nsh
+        printf "bcf boot add 1 FS0:\\\EFI\\GRUB\\grubx64.efi\nexit" >/boot/efi/startup.nsh
     else
         # This hasn't been tested
         prompt "Installing and configuring GRUB for BIOS, this might take a while..." yellow
@@ -96,9 +96,6 @@ wm_setup() {
         echo "exec startxfce4" >>"$userpath".xinitrc
         ;;
     esac
-
-    # Start X server on login if not already running
-    printf '[ "$(tty)" = "/dev/tty1" ] && ! pgrep -x Xorg >/dev/null && exec startx' >"$userpath".bash_profile
 }
 
 # shellcheck disable=SC2086
