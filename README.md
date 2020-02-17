@@ -48,13 +48,16 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 
 - ~~root password is currently none I believe~~
 - ~~Partition size selection~~
-- Partition naming
+- ~~Partition naming~~
 - Sudo configuration settings
 - Option to install a DM
 - ~~Install [yay](https://github.com/Jguer/yay) in setup~~
-- LUKS encryption
 - Better dialog experience
 - Option to change DNS server?
+
+### Might do
+
+- LUKS encryption
 
 ## Not working
 
