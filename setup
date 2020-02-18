@@ -57,6 +57,13 @@ grub_setup() {
         out grub-mkconfig -o /boot/grub/grub.cfg
     fi
     umount "$bl"
+
+    # TODO, this is untested
+    swapUUID=$(blkid -s UUID -o value "$swap")
+    sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/d' /etc/default/grub
+    echo 'GRUB_CMDLINE_LINUX_DEFAULT="resume=UUID='"$swapUUID"' quiet"' >>/etc/default/grub
+    # TODO Configure kernel parameter
+
     prompt "Finished configuring GRUB!" green
 }
 # Sets up yay
