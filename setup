@@ -1,5 +1,6 @@
 #!/bin/bash
-# Sets up the system
+# Sets up the system without any user interaction.
+# All the variables that is needed will be sourced from /info
 # shellcheck disable=SC2154
 
 user_setup() {
@@ -58,10 +59,12 @@ grub_setup() {
     fi
     umount "$bl"
 
-    # TODO, this is untested
-    swapUUID=$(blkid -s UUID -o value "$swap")
-    sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/d' /etc/default/grub
-    echo 'GRUB_CMDLINE_LINUX_DEFAULT="resume=UUID='"$swapUUID"' quiet"' >>/etc/default/grub
+    # TODO, not done
+    # Furthermore this might be possible to do before the grub
+    #prompt "Enabling hibernation..." yellow
+    #swapUUID=$(blkid -s UUID -o value "$swap")
+    #sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/d' /etc/default/grub &&
+    #printf 'GRUB_CMDLINE_LINUX_DEFAULT="resume=UUID=%s quiet' "$swapUUID" >>/etc/default/grub
     # TODO Configure kernel parameter
 
     prompt "Finished configuring GRUB!" green
@@ -125,7 +128,7 @@ system_setup
 grub_setup
 yay_setup
 # Setup wm if WM isn't empty
-[ -n "$wm" ] && wm_setup
+[[ -n $wm ]] && wm_setup
 
 # Move the errorfile to the userfolder
 mv "$errorfile" /home/"$uName"/

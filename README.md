@@ -53,7 +53,8 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - Option to install a DM
 - ~~Install [yay](https://github.com/Jguer/yay) in setup~~
 - Better dialog experience
-- Option to change DNS server?
+- Option to change DNS server
+- [NVIDIA DRM kernel modesetting](https://wiki.archlinux.org/index.php/NVIDIA#DRM_kernel_mode_setting)
 
 ### Might do
 
@@ -61,4 +62,8 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 
 ## Not working
 
-- i3 doesn't work since there are some package missing...
+- i3 doesn't work since there are some package(s) missing...
+
+### Problems
+
+The `out` function is the same in both `install` and `setup`, but can't be placed in `sharedfuncs` since it uses variables set by the script. These variables can't be exported in the first script since we'll chroot to a different environment.

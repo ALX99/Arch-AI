@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared functions
+# Shared functions between install and setup scripts
 
 # prompt
 # 1: message
