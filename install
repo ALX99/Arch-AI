@@ -48,7 +48,8 @@ system_check() {
         exit 1
 
     prompt "Checking for internet connection..." yellow
-    ping -q -c 1 -W 1 google.com 1>/dev/null || (prompt "No network connection found!" red && exit 1)
+    ping -q -c 1 -W 1 google.com &>/dev/null || prompt "No network connection found!" red && exit 1
+
     prompt "Internet connection found!" green
 
     prompt "Updating the package database, please be patient..." yellow
@@ -137,9 +138,7 @@ get_config() {
         hostname="$Reply"
         iprompt "What username would you like?" false
         uName="$Reply"
-        if [[ -n $uName && -n $hostname ]]; then
-            break
-        fi
+        [[ -n $uName && -n $hostname ]] && break
         prompt "Username, hostname or the root password was left blank, try again." red
     done
 
@@ -234,7 +233,7 @@ get_drive() {
     # such as /dev/sda
     fs=$(echo "$drives" | sed -n "$choice"p)
 
-    if [ -z "$fs" ]; then
+    if [[ -z $fs ]]; then
         prompt "Something went wrong!" red
         exit 1
     fi
@@ -343,7 +342,7 @@ jumpChroot() {
     # Move errors to the new arch installation
     mv "$errorfile" /mnt/"$errorfile"
     # export all the current lowercase
-    # variables to a info file
+    # variables into an info file
     (
         set -o posix
         set
@@ -374,11 +373,7 @@ out() {
     # TODO I have no clue why I wrote this
     lines="$(wc -l <$errorfile)"
 
-    if $verbose; then
-        "$@" 2>>$errorfile
-    else
-        "$@" 1>/dev/null 2>>$errorfile
-    fi
+    ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
 
     # TODO I have no clue why I wrote this
     [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile

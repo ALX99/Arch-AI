@@ -108,30 +108,34 @@ out() {
     # TODO I have no clue why I wrote this
     lines="$(wc -l <$errorfile)"
 
-    if $verbose; then
-        "$@" 2>>$errorfile
-    else
-        "$@" 1>/dev/null 2>>$errorfile
-    fi
+    ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
 
     # TODO I have no clue why I wrote this
     [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
 }
 
-# Source settings written by install
-# shellcheck disable=SC1091
-source /info
-source /sharedfuncs
-prompt "Running in chrooted mode!" green
-user_setup
-system_setup
-grub_setup
-yay_setup
-# Setup wm if WM isn't empty
-[[ -n $wm ]] && wm_setup
+main() {
+    # Source settings written by install
+    # shellcheck disable=SC1091
+    source /info
+    source /sharedfuncs
+    # Shred file since it contains sensative info
+    shred -n25 --remove /info
+    # Update errorfile path
+    errorfile='/'$errorfile
 
-# Move the errorfile to the userfolder
-mv "$errorfile" /home/"$uName"/
-# Force the user to read through the errorlog to make
-# sure some command(s) hasn't gone terribly wrong
-less </home/"$uName"/"$errorfile"
+    prompt "Running in chrooted mode!" green
+    user_setup
+    system_setup
+    grub_setup
+    yay_setup
+
+    # Setup wm if WM isn't empty
+    [[ -n $wm ]] && wm_setup
+
+    # Move the errorfile to the userfolder
+    mv "$errorfile" /home/"$uName"/
+    # Force the user to read through the errorlog to make
+    # sure some command(s) hasn't gone terribly wrong
+    less </home/"$uName"/"$errorfile"
+}
