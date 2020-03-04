@@ -26,7 +26,8 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 ### Things that are done without user input
 
 - Obtains fastest mirror before install
-- GPU driver detection + installation
+- GPU detection + installation
+- CPU detection + microcode installation
 - Timezone + clock setup
 - GRUB installation
 - yay installation
@@ -43,13 +44,13 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - grub
 - networkmanager
 - git
+- go (dependency of yay)
 
 ## TODO
 
 - ~~root password is currently none I believe~~
 - ~~Partition size selection~~
 - ~~Partition naming~~
-- Sudo configuration settings
 - Option to install a DM
 - ~~Install [yay](https://github.com/Jguer/yay) in setup~~
 - Better dialog experience
@@ -59,6 +60,11 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 ### Might do
 
 - LUKS encryption
+
+### Scratched
+
+- Sudo configuration settings  
+  - Your user will be added to the wheels group which will have sudo access, which is enough for most people
 
 ## Not working
 

@@ -9,7 +9,7 @@ errorfile="err.txt"
 # Packages that will be installed on the system with pacstrap
 # the only things you are allowed to remove here would be git
 # removing other things might break the setup procedure
-Pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrandr grub networkmanager git)
+Pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrandr grub networkmanager git go)
 # Required packages to run this script
 Reqs=(dialog dosfstools fzf arch-install-scripts)
 isUEFI=false
@@ -41,14 +41,11 @@ read_arguments() {
 }
 
 system_check() {
-    local gpus gpu
+    local gpus gpu cpu
 
     [ $EUID -ne 0 ] &&
         prompt "This script must be run as root" red &&
         exit 1
-
-    prompt "Checking for internet connection..." yellow
-    ! ping -q -c 1 -W 1 google.com &>/dev/null && prompt "No network connection found!" red && exit 1
 
     prompt "Internet connection found!" green
 
@@ -102,6 +99,20 @@ system_check() {
             ;;
         esac
     done
+
+    prompt "Identifying the CPU drivers..." yellow
+    cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
+    case "$cpu" in
+    *"intel"*)
+        prompt "Intel CPU found!" green
+        add_pkg intel-ucode
+        ;;
+        # TODO, no clue AMD processors contains "AMD" in vendor_id
+    *"amd"*)
+        prompt "AMD CPU found!" green
+        add_pkg amd-ucode
+        ;;
+    esac
 }
 
 # Installs missing requirements for this script (if any)
@@ -271,7 +282,12 @@ get_drive() {
 }
 
 verify() {
-    dialog --title "FINAL CONFIRMATION" --yesno "Username: $uName\nHostname: $hostname\nDE/WM: $wm\nPackages: ${Pacstrap[*]}\nLocale: $locale\nRoot partition: $RootSize\nSwap partition: $SwapSize\nHome partition: $HomeSize\nInstallation drive: $fs\nUEFI enabled: $isUEFI\n" 14 60 || exit
+    printf "Username: %s\nLocale: %s\nHostname: %s\nDE/WM: %s\n\n", "$uName" "$locale" "$hostname" "$wm"
+    printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$isUEFI"
+    printf "Packages: %s\n" "${Pacstrap[*]}"
+    read -rn 1 -p "Continue with install? (y/N) " && [[ ! $REPLY =~ ^[Yy]$ ]] && exit
+    echo "lolshit"
+    exit
     clear
 }
 
@@ -392,12 +408,14 @@ iprompt() {
     $cmd Reply
 }
 get_additions() {
-    wget -O sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/develop/sharedfuncs
-    wget -O setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup
+    echo "Downloading additions..."
+    wget -O sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/develop/sharedfuncs &>/dev/null
+    wget -O setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup &>/dev/null
+    echo "Done!"
 }
 main() {
     # TODO, will be uncommented when script is stable
-    #get_additions
+    get_additions
     source sharedfuncs
     # Remove old error file
     rm -f "$errorfile"
