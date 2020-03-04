@@ -73,7 +73,7 @@ grub_setup() {
 yay_setup() {
     userpath=/home/"$uName"/
     cd "$userpath" || exit
-    su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
+    out su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
     cd yay || exit
     su -c "makepkg -si" "$uName"
     cd ..
@@ -120,7 +120,7 @@ main() {
     source /info
     source /sharedfuncs
     # Shred file since it contains sensative info
-    #shred -n25 --remove /info
+    shred -n25 --remove /info
     # Update errorfile path
     errorfile='/'$errorfile
 
@@ -135,8 +135,8 @@ main() {
 
     # Move the errorfile to the userfolder
     mv "$errorfile" /home/"$uName"/
-    # Force the user to read through the errorlog to make
-    # sure some command(s) hasn't gone terribly wrong
+
+    prompt "Briefly check out the errorlog to make sure that something hasn't gone terribly wrong!" yellow
     less </home/"$uName"/"$errorfile"
 }
 

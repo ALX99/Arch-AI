@@ -17,7 +17,7 @@ isUEFI=false
 Fzf_Preview="fzf --border --height $(expr $(tput lines) - 1)"
 Common_Pkgs='common_pkgs'
 
-Usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
+usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 
 Flags:
     -h, --help    show this help text
@@ -32,7 +32,7 @@ read_arguments() {
             ;;
         *)
             echo "Error: Unsupported flag $1" >&2
-            echo "$Usage"
+            echo "$usage"
             exit 1
             ;;
         esac
@@ -285,8 +285,8 @@ verify() {
     printf "Username: %s\nLocale: %s\nHostname: %s\nDE/WM: %s\n\n" "$uName" "$locale" "$hostname" "$wm"
     printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$isUEFI"
     printf "Packages: %s\n" "${Pacstrap[*]}"
-    read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] && exit
-    prompt "Installation cancelled!" red
+    read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] &&
+        prompt "Installation cancelled!" red && exit
 }
 
 # 1=bootloader, 2=swap, 3=root, 4=home
@@ -407,9 +407,9 @@ iprompt() {
 }
 get_additions() {
     echo "Downloading additions..."
-    wget -O sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/develop/sharedfuncs &>/dev/null
-    wget -O setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup &>/dev/null
-    wget -O common_pkgs https://raw.githubusercontent.com/alx99/arch-ai/develop/common_pkgs &>/dev/null
+    wget -O sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/master/sharedfuncs &>/dev/null
+    wget -O setup https://raw.githubusercontent.com/alx99/arch-ai/master/setup &>/dev/null
+    wget -O common_pkgs https://raw.githubusercontent.com/alx99/arch-ai/master/common_pkgs &>/dev/null
     echo "Done!"
 }
 main() {
