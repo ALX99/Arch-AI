@@ -409,6 +409,7 @@ get_additions() {
     echo "Downloading additions..."
     wget -O sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/develop/sharedfuncs &>/dev/null
     wget -O setup https://raw.githubusercontent.com/alx99/arch-ai/develop/setup &>/dev/null
+    wget -O common_pkgs https://raw.githubusercontent.com/alx99/arch-ai/develop/common_pkgs &>/dev/null
     echo "Done!"
 }
 main() {
