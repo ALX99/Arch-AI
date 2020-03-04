@@ -139,3 +139,5 @@ main() {
     # sure some command(s) hasn't gone terribly wrong
     less </home/"$uName"/"$errorfile"
 }
+
+main "$@"
