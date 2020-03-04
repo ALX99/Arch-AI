@@ -48,9 +48,7 @@ system_check() {
         exit 1
 
     prompt "Checking for internet connection..." yellow
-    if ping -q -c 1 -W 1 google.com &>/dev/null; then
-        prompt "No network connection found!" red && exit 1
-    fi
+    ! ping -q -c 1 -W 1 google.com &>/dev/null && prompt "No network connection found!" red && exit 1
 
     prompt "Internet connection found!" green
 

@@ -120,7 +120,7 @@ main() {
     source /info
     source /sharedfuncs
     # Shred file since it contains sensative info
-    shred -n25 --remove /info
+    #shred -n25 --remove /info
     # Update errorfile path
     errorfile='/'$errorfile
 
