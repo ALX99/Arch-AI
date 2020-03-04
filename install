@@ -11,7 +11,7 @@ errorfile="err.txt"
 # removing other things might break the setup procedure
 Pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrandr grub networkmanager git go)
 # Required packages to run this script
-Reqs=(dialog dosfstools fzf arch-install-scripts)
+Reqs=(dosfstools fzf arch-install-scripts)
 isUEFI=false
 
 Fzf_Preview="fzf --border --height $(expr $(tput lines) - 1)"
@@ -189,7 +189,7 @@ get_config() {
 }
 
 get_wm() {
-    local choice cmd args
+    local choice cmd
     prompt 'Choose a WM/DE' blue
     wm="$(printf "KDE Plasma\nXFCE 4\ni3-gaps\nNone" | $Fzf_Preview)"
 
@@ -211,8 +211,8 @@ get_wm() {
 # Ask for some additional popular packages
 get_pkgs() {
     local choice choices
-    prompt "Press <Tab> to mark multiple entries" blue
 
+    prompt "Would you like to install any additional common packages? (Use <Tab>)" blue
     choices=$(cut -d' ' -f2- <"$Common_Pkgs" | $Fzf_Preview -m)
     for choice in $choices; do
         add_pkg "$(grep "$choice" "$Common_Pkgs" | cut -d' ' -f1)"
@@ -282,13 +282,11 @@ get_drive() {
 }
 
 verify() {
-    printf "Username: %s\nLocale: %s\nHostname: %s\nDE/WM: %s\n\n", "$uName" "$locale" "$hostname" "$wm"
+    printf "Username: %s\nLocale: %s\nHostname: %s\nDE/WM: %s\n\n" "$uName" "$locale" "$hostname" "$wm"
     printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$isUEFI"
     printf "Packages: %s\n" "${Pacstrap[*]}"
-    read -rn 1 -p "Continue with install? (y/N) " && [[ ! $REPLY =~ ^[Yy]$ ]] && exit
-    echo "lolshit"
-    exit
-    clear
+    read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] && exit
+    prompt "Installation cancelled!" red
 }
 
 # 1=bootloader, 2=swap, 3=root, 4=home

@@ -1,8 +1,7 @@
 # Arch-AI
 
 Quick and easy Arch Linux installation script aimed towards setting up the most useful and crucial things you will need on your system.  
-It should _probably_ work right now if you want to use it but I'm continuously improving it when I have time.
-
+It should _probably_ work right now if you want to use it but I'm continuously improving it when I have time.  
 **Pull requests are welcome**
 
 ## Why
@@ -53,7 +52,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - ~~Partition naming~~
 - Option to install a DM
 - ~~Install [yay](https://github.com/Jguer/yay) in setup~~
-- Better dialog experience
+- ~~Better dialog experience~~
 - Option to change DNS server
 - [NVIDIA DRM kernel modesetting](https://wiki.archlinux.org/index.php/NVIDIA#DRM_kernel_mode_setting)
 
