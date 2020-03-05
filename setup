@@ -6,7 +6,7 @@
 user_setup() {
     prompt "Setting up the user $uName..." yellow
     useradd -m -G wheel "$uName"
-    pacman -Qi sudo &>/dev/null && echo "$uName ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers.d/"$uName"
+    sed -i "/%wheel ALL=(ALL) ALL/s/^#//g" /etc/sudoers
     echo "$uName:$userPass" | out chpasswd
     prompt "Finished setting up the user ${uName}!" green
 
@@ -71,7 +71,7 @@ grub_setup() {
 }
 # Sets up yay
 yay_setup() {
-    prompt "Installing  yay..." yellow
+    prompt "Installing yay..." yellow
     userpath=/home/"$uName"/
     cd "$userpath" || exit
     out su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
