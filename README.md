@@ -3,6 +3,9 @@
 Quick and easy Arch Linux installation script aimed towards setting up the most useful and crucial things you will need on your system.  
 The script is continuously being developed in the `develop` branch whenever I have motivation and time. I aim to keep the master branch as bug-free as possible, but no promises.
 
+## Preview
+
+[![asciicast](https://asciinema.org/a/307557.svg)](https://asciinema.org/a/307557)  
 Finally ready to install Arch Linux?  
 
 ```shell
