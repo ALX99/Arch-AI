@@ -71,6 +71,7 @@ grub_setup() {
 }
 # Sets up yay
 yay_setup() {
+    prompt "Installing  yay..." yellow
     userpath=/home/"$uName"/
     cd "$userpath" || exit
     out su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
@@ -79,6 +80,7 @@ yay_setup() {
     cd ..
     rm -rf yay/
     cd /
+    prompt "Finished installing yay!" green
 }
 
 wm_setup() {
