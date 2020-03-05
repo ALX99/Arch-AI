@@ -6,7 +6,7 @@ The script is continuously being developed in the `develop` branch whenever I ha
 Finally ready to install Arch Linux?  
 
 ```shell
-wget -O- https://cutt.ly/ArchAI | bash
+wget -O- cutt.ly/Arch | bash; ./install
 ```
 
 ## Why
