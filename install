@@ -405,16 +405,8 @@ iprompt() {
     $2 && cmd+="s"
     $cmd Reply
 }
-get_additions() {
-    echo "Downloading additions..."
-    wget -O sharedfuncs https://raw.githubusercontent.com/alx99/arch-ai/master/sharedfuncs &>/dev/null
-    wget -O setup https://raw.githubusercontent.com/alx99/arch-ai/master/setup &>/dev/null
-    wget -O common_pkgs https://raw.githubusercontent.com/alx99/arch-ai/master/common_pkgs &>/dev/null
-    echo "Done!"
-}
 main() {
     # TODO, will be uncommented when script is stable
-    get_additions
     source sharedfuncs
     # Remove old error file
     rm -f "$errorfile"

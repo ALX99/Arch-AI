@@ -6,7 +6,7 @@ The script is continuously being developed in the `develop` branch whenever I ha
 Finally ready to install Arch Linux?  
 
 ```shell
-wget https://cutt.ly/ArchAI; chmod +x ArchAI; ./ArchAI
+wget -O- https://cutt.ly/ArchAI | bash
 ```
 
 ## Why
