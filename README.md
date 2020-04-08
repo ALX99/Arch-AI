@@ -60,8 +60,10 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - Option to install a DM
 - ~~Install [yay](https://github.com/Jguer/yay) in setup~~
 - ~~Better dialog experience~~
-- Option to change DNS server
+- ~~Option to change DNS server~~
+  - The user will set this through Network if he so chooses
 - [NVIDIA DRM kernel modesetting](https://wiki.archlinux.org/index.php/NVIDIA#DRM_kernel_mode_setting)
+- Hibernation
 
 ### Might do
 
@@ -71,10 +73,6 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 
 - Sudo configuration settings  
   - Your user will be added to the wheels group which will have sudo access, which is enough for most people
-
-## Not working
-
-- i3 doesn't work since there are some package(s) missing...
 
 ### Problems
 

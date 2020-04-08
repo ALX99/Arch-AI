@@ -26,7 +26,7 @@ system_setup() {
     out timedatectl set-timezone "$timeZ"
     # Enable Network Time Protocol (NPT) synchronization
     timedatectl set-ntp true
-    # Write the current software clock time to thehardware clock
+    # Write the current software clock time to the hardware clock
     hwclock --systohc
     sed -i "/$locale/s/^#//g" /etc/locale.gen
     localectl set-locale LANG="$locale"
@@ -35,6 +35,20 @@ system_setup() {
     echo "$hostname" >/etc/hostname
     echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
     prompt "Finished setting up the system!" green
+}
+
+hibernation_setup() {
+    # TODO, not done
+    # Furthermore this might be possible to do before the grub
+
+    # You have to regenerate the GRUB config file after this
+    prompt "Modifying kernel parameters to allow for hibernation..." yellow
+    swapUUID=$(blkid -s UUID -o value "$swap")
+    sed -i '/GRUB_CMDLINE_LINUX=/d' /etc/default/grub &&
+        printf "GRUB_CMDLINE_LINUX=\"resume=UUID=%s\"\n" "$swapUUID" >>/etc/default/grub &&
+        sed -i 's/\<keyboard\>/& resume/' /etc/mkinitcpio.conf
+
+    mkinitcpio -p linux
 }
 
 grub_setup() {
@@ -58,14 +72,6 @@ grub_setup() {
         out grub-mkconfig -o /boot/grub/grub.cfg
     fi
     umount "$bl"
-
-    # TODO, not done
-    # Furthermore this might be possible to do before the grub
-    #prompt "Enabling hibernation..." yellow
-    #swapUUID=$(blkid -s UUID -o value "$swap")
-    #sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/d' /etc/default/grub &&
-    #printf 'GRUB_CMDLINE_LINUX_DEFAULT="resume=UUID=%s quiet' "$swapUUID" >>/etc/default/grub
-    # TODO Configure kernel parameter
 
     prompt "Finished configuring GRUB!" green
 }
