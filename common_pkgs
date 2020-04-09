@@ -3,3 +3,9 @@ alsa-utils Alsa Utils
 neovim NeoVim
 nano Nano
 openssh OpenSSH
+linux-lts The LTS kernel
+mlocate The locate command
+noto-fonts Google Noto fonts
+ttf-fira-code Fira Code
+ttf-cascadia-code Cascadia Code
+xorg-xbacklight Brightnes settings for laptops
