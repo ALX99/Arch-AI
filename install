@@ -99,20 +99,6 @@ system_check() {
             ;;
         esac
     done
-
-    prompt "Identifying the CPU drivers..." yellow
-    cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
-    case "$cpu" in
-    *"intel"*)
-        prompt "Intel CPU found!" green
-        add_pkg intel-ucode
-        ;;
-        # TODO, no clue AMD processors contains "AMD" in vendor_id
-    *"amd"*)
-        prompt "AMD CPU found!" green
-        add_pkg amd-ucode
-        ;;
-    esac
 }
 
 # Installs missing requirements for this script (if any)
@@ -186,6 +172,25 @@ get_config() {
         fi
         prompt "Passwords do not match, try again." red
     done
+}
+
+get_micro() {
+    printf "\033[1;34mWould you like to install microcode updates for your CPU? (Y/n)\033[0m "
+    read -rn 1 && [[ $REPLY =~ ^[Nn]$ ]] && return
+
+    prompt "Identifying the CPU drivers..." yellow
+    cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
+    case "$cpu" in
+    *"intel"*)
+        prompt "Intel CPU found!" green
+        add_pkg intel-ucode
+        ;;
+        # TODO, no clue AMD processors contains "AMD" in vendor_id
+    *"amd"*)
+        prompt "AMD CPU found!" green
+        add_pkg amd-ucode
+        ;;
+    esac
 }
 
 get_wm() {
@@ -416,6 +421,7 @@ main() {
     system_check
     installReqs
     get_config
+    get_micro
     get_wm
     get_pkgs
     get_drive

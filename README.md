@@ -16,7 +16,7 @@ wget -O- cutt.ly/Arch | bash; ./install
 
 I do realize there exists several other popular automatic Arch Linux install scripts out there but most of them appear unnecessarily complex and seem annoying to use to me.  
 This automatic installation script focuses primarily on user-friendliness. It will set up and install sensible packages without asking you such as Network Manager, sudo and git.  
-It'll also separate the / and /home directories in different partitions, configure the timezone automatically and download the microcode for your CPU and drivers for your GPU.
+It'll also separate the / and /home directories in different partitions, configure the timezone automatically and download the drivers for your GPU.
 
 The script will primarily focus on core OS features many people use, things such as manually specifying different partitions _might_ never be supported.
 
