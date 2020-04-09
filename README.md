@@ -33,6 +33,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - GRUB installation
 - yay installation
 - Option to install additional common packages
+- Option to auto-trim mounted SSDs once a week
 - Locale configuration and generation
 - Obtains fastest mirror before install
 - Error log

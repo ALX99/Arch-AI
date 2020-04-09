@@ -193,6 +193,15 @@ get_micro() {
     esac
 }
 
+# https://wiki.archlinux.org/index.php/Solid_state_drive#TRIM
+get_trim() {
+    printf "\033[1;34mWould you like to auto-trim your mounted SSDs once a week? (Y/n)\033[0m "
+    read -rn 1 && [[ $REPLY =~ ^[Nn]$ ]] && return
+    prompt "Enabling auto-trimming of SSDs!"
+    add_pkg util-linux
+    enableSSDTRIM=true
+}
+
 get_wm() {
     local choice cmd
     prompt 'Choose a WM/DE' blue
@@ -422,6 +431,7 @@ main() {
     installReqs
     get_config
     get_micro
+    get_trim
     get_wm
     get_pkgs
     get_drive

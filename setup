@@ -13,7 +13,6 @@ user_setup() {
     prompt "Setting the root password..." yellow
     echo "root:$rootPW" | out chpasswd
     prompt "Set the root password!" green
-
 }
 
 system_setup() {
@@ -35,6 +34,11 @@ system_setup() {
     echo "$hostname" >/etc/hostname
     echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
     prompt "Finished setting up the system!" green
+}
+
+trim_setup() {
+    out systmectl enable fstrim.timer
+    prompt "Enabled auto-trimming of SSDs!" green
 }
 
 hibernation_setup() {
@@ -138,8 +142,8 @@ main() {
     grub_setup
     yay_setup
 
-    # Setup wm if WM isn't empty
-    [[ -n $wm ]] && wm_setup
+    [[ ! -z $enableSSDTRIM ]] && trim_setup
+    [[ ! -z $wm ]] && wm_setup
 
     # Move the errorfile to the userfolder
     mv "$errorfile" /home/"$uName"/
