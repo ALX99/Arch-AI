@@ -205,7 +205,7 @@ get_trim() {
     printf "\033[1;34mWould you like to auto-trim your mounted SSDs once a week? (Y/n)\033[0m "
     read -rn 1 && [[ $REPLY =~ ^[Nn]$ ]] && return
     printf "\n"
-    prompt "Enabling auto-trimming of SSDs!"
+    prompt "Enabling auto-trimming of SSDs!" green
     add_pkg util-linux
     # shellcheck disable=SC2034
     enableSSDTRIM=true
@@ -373,9 +373,13 @@ format_fs() {
 # 1: size of partition
 mkpart() {
     echo n
+    # Here it asks for the partition type if it is a DOS partition
+    ! $isUEFI && echo p
     echo
     echo
     echo "$1"
+    # Partition x contain signature message
+    echo "y"
 }
 
 # chroot into the new arch installation
