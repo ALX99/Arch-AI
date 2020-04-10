@@ -1,0 +1,429 @@
+#!/bin/bash
+# NOTE: Lowercase variables will be exported to a file
+# hence variables I don't care about later start with an uppercase
+
+# This file will be forcefully removed when starting this script.
+# Keep this in mind if wanting to change this file for whatever reason
+errorfile="err.txt"
+
+# Packages that will be installed on the system with pacstrap
+# the only things you are allowed to remove here would be git
+# removing other things might break the setup procedure
+Pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrandr grub networkmanager git go)
+# Required packages to run this script
+Reqs=(dosfstools fzf arch-install-scripts)
+isUEFI=false
+
+Fzf_Preview="fzf --border --height $(expr $(tput lines) - 1)"
+Common_Pkgs='common_pkgs'
+
+usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
+
+Flags:
+    -h, --help    show this help text
+    -v, --verbose toggle verbose output"
+
+read_arguments() {
+    verbose=false
+    while (("$#")); do
+        case "$1" in
+        -v | --verbose)
+            verbose=true
+            ;;
+        *)
+            echo "Error: Unsupported flag $1" >&2
+            echo "$usage"
+            exit 1
+            ;;
+        esac
+        shift
+    done
+}
+
+system_check() {
+    local gpus gpu cpu
+
+    [ $EUID -ne 0 ] &&
+        prompt "This script must be run as root" red &&
+        exit 1
+
+    prompt "Internet connection found!" green
+
+    prompt "Updating the package database, please be patient..." yellow
+    out pacman -Sy
+    prompt "Updated the package database!" green
+
+    prompt "Checking for UEFI..." yellow
+    if ls -A /sys/firmware/efi/efivars/ &>/dev/null; then
+        isUEFI=true
+        prompt "Found UEFI!" green
+    fi
+
+    prompt "Identifying GPU drivers..." yellow
+    gpus=$(lspci | grep -e VGA -e 3D | tr '[:upper:]' '[:lower:]')
+
+    # https://wiki.archlinux.org/index.php/Xorg#Installation
+    # https://wiki.archlinux.org/index.php/Hardware_video_acceleration
+    for gpu in $gpus; do
+        case "$gpu" in
+        # https://wiki.archlinux.org/index.php/Intel_graphics
+        *"intel"*)
+            prompt "Intel GPU found!" green
+            add_pkg mesa
+            add_pkg vulkan-intel
+            # HW acceleration
+            add_pkg intel-media-driver
+            add_pkg libva-intel-driver
+            # 2D acceleration in Xorg
+            add_pkg xf86-video-intel
+            ;;
+            # https://wiki.archlinux.org/index.php/AMDGPU
+        *"amd"*)
+            prompt "AMD GPU found!" green
+            add_pkg mesa
+            add_pkg vulkan-radeon
+            # HW acceleration
+            add_pkg libva-mesa-driver
+            add_pkg mesa-vdpau
+            # 2D acceleration in Xorg
+            add_pkg xf86-video-amdgpu
+            ;;
+            # https://wiki.archlinux.org/index.php/NVIDIA
+        *"nvidia"*)
+            prompt "Nvidia GPU found!" green
+            add_pkg nvidia
+            add_pkg nvidia-utils
+            # HW acceleration
+            add_pkg libva-mesa-driver
+            add_pkg mesa-vdpau
+            ;;
+        esac
+    done
+
+    prompt "Identifying the CPU drivers..." yellow
+    cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
+    case "$cpu" in
+    *"intel"*)
+        prompt "Intel CPU found!" green
+        add_pkg intel-ucode
+        ;;
+        # TODO, no clue AMD processors contains "AMD" in vendor_id
+    *"amd"*)
+        prompt "AMD CPU found!" green
+        add_pkg amd-ucode
+        ;;
+    esac
+}
+
+# Installs missing requirements for this script (if any)
+# and updates the mirrorlist if needed
+installReqs() {
+    if ! grep -q Reflector /etc/pacman.d/mirrorlist; then
+        prompt "Installing reflector..." yellow
+        out pacman -S reflector --needed --noconfirm
+        prompt "Done!" green
+        prompt "Generating new pacman mirrors, please be patient..." yellow
+        out reflector --verbose --latest 100 --sort rate --save /etc/pacman.d/mirrorlist
+        prompt "Done generating mirrors" green
+    fi
+
+    prompt "Installing additional packages if required..." yellow
+    out pacman -S "${Reqs[@]}" --needed --noconfirm
+}
+
+# Get username, hostname, password, locale
+get_config() {
+    local locale_list pass1 pass2 root1 root2
+
+    while [[ -z $locale ]]; do
+        locale_list="$(grep UTF-8 /etc/locale.gen | awk '{print $1}' | cut -c 2-)"
+        # TODO, the US.UTF-8 option is uncommented in the Arch Linux
+        # live ISO, so for now I'll add it as an option manually
+        locale_list+=$(printf "\nen.US.UTF-8")
+        prompt "Which locale would you like?" blue
+        locale=$(echo "$locale_list" | $Fzf_Preview)
+    done
+    while true; do
+        iprompt "What hostname would you like?" false
+        # shellcheck disable=SC2154
+        hostname="$Reply"
+        iprompt "What username would you like?" false
+        uName="$Reply"
+        [[ -n $uName && -n $hostname ]] && break
+        prompt "Username, hostname or the root password was left blank, try again." red
+    done
+
+    # Get user password
+    while true; do
+        iprompt "What password would you like for ${uName}?" true
+        pass1="$Reply"
+        echo
+        iprompt "Confirm password for $uName" true
+        pass2="$Reply"
+        echo
+        if [ "$pass1" == "$pass2" ]; then
+            # userPass is written to info file
+            # shellcheck disable=SC2034
+            userPass="$pass1"
+            break
+        fi
+        prompt "Passwords do not match, try again." red
+    done
+
+    # Get root password
+    while true; do
+        iprompt "What password would you like for the root user?" true
+        root1="$Reply"
+        echo
+        iprompt "Confirm password for the root user" true
+        root2="$Reply"
+        echo
+        if [ "$root1" == "$root2" ]; then
+            # userPass is written to info file
+            # shellcheck disable=SC2034
+            rootPW="$root1"
+            break
+        fi
+        prompt "Passwords do not match, try again." red
+    done
+}
+
+get_wm() {
+    local choice cmd
+    prompt 'Choose a WM/DE' blue
+    wm="$(printf "KDE Plasma\nXFCE 4\ni3-gaps\nNone" | $Fzf_Preview)"
+
+    # Add the WM package to be packstrapped
+    case "$wm" in
+    "i3-gaps")
+        add_pkg i3-gaps
+        add_pkg rxvt-unicode
+        ;;
+    "KDE Plasma")
+        add_pkg plasma
+        ;;
+    "XFCE 4")
+        add_pkg xfce4
+        ;;
+    esac
+}
+
+# Ask for some additional popular packages
+get_pkgs() {
+    local choice choices
+
+    prompt "Would you like to install any additional common packages? (Use <Tab>)" blue
+    choices=$(cut -d' ' -f2- <"$Common_Pkgs" | $Fzf_Preview -m)
+    for choice in $choices; do
+        add_pkg "$(grep "$choice" "$Common_Pkgs" | cut -d' ' -f1)"
+    done
+}
+
+# Adds a package to be pacstrapped
+add_pkg() {
+    # Add package to list if not already there
+    if [[ ${Pacstrap[*]} != *"$1"* ]]; then
+        Pacstrap+=("$1")
+    fi
+}
+
+# Asks which drive arch should be installed to
+get_drive() {
+    local drives numDrives choice
+    lsblk
+    echo
+    drives=$(find /dev/sd*[a-z] | sort)
+    numDrives=$(echo "$drives" | wc -w)
+
+    echo "$drives" | awk '{print NR,$0}'
+    while [[ $choice -le 0 || $choice -gt $numDrives ]]; do
+        read -r -p "Which drive would you like to install Arch on [1-$numDrives]: " choice
+    done
+
+    # fs contains the base path to the drive
+    # such as /dev/sda
+    fs=$(echo "$drives" | sed -n "$choice"p)
+
+    if [[ -z $fs ]]; then
+        prompt "Something went wrong!" red
+        exit 1
+    fi
+
+    local re='^[0-9]+$'
+
+    while ! [[ $RootSize =~ $re ]]; do
+        read -r -p "How big should the root partition be [GB]:" RootSize
+    done
+
+    while ! [[ $SwapSize =~ $re ]]; do
+        read -r -p "How big should the swap partition be [GB]:" SwapSize
+    done
+
+    while ! [[ $HomeSize =~ $re ]]; do
+        prompt "Type 0 to fill the remaining space on the disk selected" yellow
+        read -r -p "Type out the size of the home partition [GB]:" HomeSize
+    done
+
+    # Set formatting of the variables
+    # so that fdisk can use them
+    RootSize="+${RootSize}G"
+    SwapSize="+${SwapSize}G"
+    if [ "$HomeSize" != "0" ]; then
+        HomeSize="+${HomeSize}G"
+    fi
+
+    # Setup paths to the different
+    # partitions on the hard drive
+    bl="${fs}"1
+    swap="${fs}"2
+    root="${fs}"3
+    home="${fs}"4
+
+}
+
+verify() {
+    printf "Username: %s\nLocale: %s\nHostname: %s\nDE/WM: %s\n\n" "$uName" "$locale" "$hostname" "$wm"
+    printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$isUEFI"
+    printf "Packages: %s\n" "${Pacstrap[*]}"
+    read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] &&
+        prompt "Installation cancelled!" red && exit
+    echo
+}
+
+# 1=bootloader, 2=swap, 3=root, 4=home
+format_fs() {
+    while swapon --show | grep -q "$fs"; do
+        prompt "$fs seems to have swap partition, trying to disable it!" red
+        swapoff "$(swapon --show | grep "$fs" | awk '{ print $1}')"
+    done
+
+    while df | grep -q "$fs"; do
+        prompt "$fs seems to have some partion(s) mounted, trying to unmount!" red
+        ls "$fs"?* | xargs -n1 umount -l
+        sleep 1
+    done
+
+    prompt "Creating partitions..." yellow
+    (
+        # Create new GPT partition table for UEFI,
+        # a DOS partition table for BIOS
+
+        $isUEFI && echo g && mkpart "+512M" || echo o && mkpart "+200M"
+
+        mkpart "$SwapSize"
+        mkpart "$RootSize"
+        # Either fill the rest of the drive, or the chosen amount
+        ([[ $HomeSize -eq 0 ]] && mkpart) || mkpart "$HomeSize"
+        echo w
+    ) | out fdisk "$fs"
+    prompt "Partitions created!" green
+
+    prompt "Formatting partitions..." yellow
+    out mkfs.fat -F32 "$bl"
+    out mkswap -L SWAP_PART "$swap"
+    out swapon "$swap"
+    out mkfs.ext4 -F "$root"
+    out mkfs.ext4 -F "$home"
+    prompt "Formatted partitions!" green
+
+    prompt "Setting partition labels..." yellow
+    out e2label "$root" ROOT_PART
+    out e2label "$home" HOME_PART
+    out e2label "$bl" BOOT_PART
+    prompt "Partition labels set!" green
+
+    prompt "Mounting $root and ${home}..." yellow
+    mount "$root" /mnt
+    mkdir /mnt/home
+    mount "$home" /mnt/home
+    prompt "Mounting finished!" green
+}
+
+# sequence for creating a new partition
+# 1: size of partition
+mkpart() {
+    echo n
+    echo
+    echo
+    # In case we get the 'already contains signature' message
+    # we need to send 'y'. If this message doesn't show
+    # sending 'y' won't have any affect
+    echo y
+    echo "$1"
+}
+
+# chroot into the new arch installation
+jumpChroot() {
+    # Move errors to the new arch installation
+    mv "$errorfile" /mnt/"$errorfile"
+    # export all the current lowercase
+    # variables into an info file
+    (
+        set -o posix
+        set
+    ) | grep -Ev '^([A-Z]|.$)' >/mnt/info
+
+    cp setup /mnt/setup
+    cp sharedfuncs /mnt/sharedfuncs
+    chmod 554 /mnt/setup
+
+    # Launch the setup script
+    arch-chroot /mnt /bin/bash <<"EOF"
+./setup
+EOF
+}
+arch_install() {
+    prompt "Pacstrapping packages..." yellow
+    pacstrap /mnt "${Pacstrap[@]}"
+    genfstab -U /mnt >/mnt/etc/fstab
+    prompt "Finished pacstrapping packages" green
+}
+
+# out logs the errors to the errorfile
+# and then echos output of commands
+# if verbose is true
+out() {
+    local lines
+    echo "COMMAND: $*" >>$errorfile
+    # TODO I have no clue why I wrote this
+    lines="$(wc -l <$errorfile)"
+
+    ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
+
+    # TODO I have no clue why I wrote this
+    [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
+}
+# shellcheck disable=SC2178
+# shellcheck disable=SC2179
+# shellcheck disable=SC2128
+# Interactive prompt, reads the reply to the $Reply variable
+# 1: message
+# 2: [true, false] silent mode
+iprompt() {
+    local cmd
+    printf "\033[1;34m%s: \033[0m" "$1"
+    cmd="read -r"
+    $2 && cmd+="s"
+    $cmd Reply
+}
+main() {
+    # TODO, will be uncommented when script is stable
+    source sharedfuncs
+    # Remove old error file
+    rm -f "$errorfile"
+    read_arguments "$@"
+    prompt "Running in non chrooted mode!" green
+    system_check
+    installReqs
+    get_config
+    get_wm
+    get_pkgs
+    get_drive
+    verify
+    format_fs
+    arch_install
+    jumpChroot
+    prompt "Arch Linux successfully installed!" green
+}
+
+main "$@"

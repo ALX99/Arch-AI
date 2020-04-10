@@ -1,0 +1,145 @@
+#!/bin/bash
+# Sets up the system without any user interaction.
+# All the variables that is needed will be sourced from /info
+# shellcheck disable=SC2154
+
+user_setup() {
+    prompt "Setting up the user $uName..." yellow
+    useradd -m -G wheel "$uName"
+    sed -i "/%wheel ALL=(ALL) ALL/s/^#//g" /etc/sudoers
+    echo "$uName:$userPass" | out chpasswd
+    prompt "Finished setting up the user ${uName}!" green
+
+    prompt "Setting the root password..." yellow
+    echo "root:$rootPW" | out chpasswd
+    prompt "Set the root password!" green
+
+}
+
+system_setup() {
+    local timeZ
+    prompt "Setting up the system..." yellow
+    out systemctl enable NetworkManager
+
+    timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
+    out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
+    out timedatectl set-timezone "$timeZ"
+    # Enable Network Time Protocol (NPT) synchronization
+    timedatectl set-ntp true
+    # Write the current software clock time to thehardware clock
+    hwclock --systohc
+    sed -i "/$locale/s/^#//g" /etc/locale.gen
+    localectl set-locale LANG="$locale"
+    out locale-gen
+
+    echo "$hostname" >/etc/hostname
+    echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
+    prompt "Finished setting up the system!" green
+}
+
+grub_setup() {
+    if $isUEFI; then
+        prompt "Downloading additional dependencies for GRUB with UEFI..." yellow
+        out pacman -S --noconfirm --needed efibootmgr
+        prompt "Installing and configuring GRUB for UEFI, this might take a while..." yellow
+        out mkdir /boot/efi
+        out mount "$bl" /boot/efi
+        out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
+        out grub-mkconfig -o /boot/grub/grub.cfg
+        # Improve the chances of EFI recognizing the OS
+        out mkdir /boot/efi/EFI/BOOT
+        out cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+        printf "bcf boot add 1 FS0:\\\EFI\\GRUB\\grubx64.efi\nexit" >/boot/efi/startup.nsh
+    else
+        # This hasn't been tested
+        prompt "Installing and configuring GRUB for BIOS, this might take a while..." yellow
+        out mount "$bl" /boot/
+        out grub-install --target=i386-pc "$fs"
+        out grub-mkconfig -o /boot/grub/grub.cfg
+    fi
+    umount "$bl"
+
+    # TODO, not done
+    # Furthermore this might be possible to do before the grub
+    #prompt "Enabling hibernation..." yellow
+    #swapUUID=$(blkid -s UUID -o value "$swap")
+    #sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/d' /etc/default/grub &&
+    #printf 'GRUB_CMDLINE_LINUX_DEFAULT="resume=UUID=%s quiet' "$swapUUID" >>/etc/default/grub
+    # TODO Configure kernel parameter
+
+    prompt "Finished configuring GRUB!" green
+}
+# Sets up yay
+yay_setup() {
+    prompt "Installing yay..." yellow
+    userpath=/home/"$uName"/
+    cd "$userpath" || exit
+    out su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
+    cd yay || exit
+    su -c "makepkg -si" "$uName"
+    cd ..
+    rm -rf yay/
+    cd /
+    prompt "Finished installing yay!" green
+}
+
+wm_setup() {
+    # Load X resources
+    echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
+
+    case "$wm" in
+    "i3-gaps")
+        echo "exec i3" >>"$userpath".xinitrc
+        ;;
+    "KDE Plasma")
+        echo "exec startplasma-x11" >>"$userpath".xinitrc
+        ;;
+    "XFCE 4")
+        echo "exec startxfce4" >>"$userpath".xinitrc
+        ;;
+    esac
+}
+
+# shellcheck disable=SC2086
+# out logs the errors to the errorfile
+# and then echos output of commands
+# if verbose is true
+out() {
+    local lines
+    echo "COMMAND: $*" >>$errorfile
+    # TODO I have no clue why I wrote this
+    lines="$(wc -l <$errorfile)"
+
+    ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
+
+    # TODO I have no clue why I wrote this
+    [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
+}
+
+main() {
+    # Source settings written by install
+    # shellcheck disable=SC1091
+    source /info
+    source /sharedfuncs
+    # Shred file since it contains sensative info
+    shred -n25 --remove /info
+    # Update errorfile path
+    errorfile='/'$errorfile
+
+    prompt "Running in chrooted mode!" green
+    user_setup
+    system_setup
+    grub_setup
+    yay_setup
+
+    # Setup wm if WM isn't empty
+    [[ -n $wm ]] && wm_setup
+
+    # Move the errorfile to the userfolder
+    mv "$errorfile" /home/"$uName"/
+
+    prompt "Briefly check out the errorlog to make sure that something hasn't gone terribly wrong!" yellow
+    less </home/"$uName"/"$errorfile"
+}
+
+main "$@"
