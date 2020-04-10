@@ -14,7 +14,7 @@ Pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrand
 Reqs=(dosfstools fzf arch-install-scripts)
 isUEFI=false
 
-Fzf_Preview="fzf --border --height $(expr $(tput lines) - 1)"
+Fzf_Preview="fzf --border --height 50%"
 Common_Pkgs='common_pkgs'
 
 usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
@@ -197,6 +197,7 @@ get_micro() {
 get_trim() {
     printf "\033[1;34mWould you like to auto-trim your mounted SSDs once a week? (Y/n)\033[0m "
     read -rn 1 && [[ $REPLY =~ ^[Nn]$ ]] && return
+    printf '\n'
     prompt "Enabling auto-trimming of SSDs!"
     add_pkg util-linux
     enableSSDTRIM=true
@@ -227,7 +228,7 @@ get_pkgs() {
     local choice choices
 
     prompt "Would you like to install any additional common packages? (Use <Tab>)" blue
-    choices=$(cut -d' ' -f2- <"$Common_Pkgs" | $Fzf_Preview -m)
+    choices=$(cat "$Common_Pkgs" | $Fzf_Preview -m)
     for choice in $choices; do
         add_pkg "$(grep "$choice" "$Common_Pkgs" | cut -d' ' -f1)"
     done
@@ -292,7 +293,6 @@ get_drive() {
     swap="${fs}"2
     root="${fs}"3
     home="${fs}"4
-
 }
 
 verify() {
@@ -386,6 +386,7 @@ jumpChroot() {
 ./setup
 EOF
 }
+
 arch_install() {
     prompt "Pacstrapping packages..." yellow
     pacstrap /mnt "${Pacstrap[@]}"
@@ -407,6 +408,7 @@ out() {
     # TODO I have no clue why I wrote this
     [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
 }
+
 # shellcheck disable=SC2178
 # shellcheck disable=SC2179
 # shellcheck disable=SC2128
@@ -420,6 +422,7 @@ iprompt() {
     $2 && cmd+="s"
     $cmd Reply
 }
+
 main() {
     # TODO, will be uncommented when script is stable
     source sharedfuncs
