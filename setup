@@ -37,7 +37,7 @@ system_setup() {
 }
 
 trim_setup() {
-    out systmectl enable fstrim.timer
+    out systemctl enable fstrim.timer
     prompt "Enabled auto-trimming of SSDs!" green
 }
 
@@ -142,8 +142,9 @@ main() {
     grub_setup
     yay_setup
 
-    [[ ! -z $enableSSDTRIM ]] && trim_setup
-    [[ ! -z $wm ]] && wm_setup
+    [[ -n $wm ]] && wm_setup
+    [[ -n $enableSSDTRIM ]] && trim_setup
+    [[ -n $enableHibernation ]] && hibernation_setup
 
     # Move the errorfile to the userfolder
     mv "$errorfile" /home/"$uName"/
