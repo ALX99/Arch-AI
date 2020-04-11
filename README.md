@@ -6,7 +6,7 @@ The script is continuously being developed in the `develop` branch whenever I ha
 ## Preview
 
 [![asciicast](https://asciinema.org/a/307557.svg)](https://asciinema.org/a/307557)  
-Finally ready to install Arch Linux?  
+Finally ready to install Arch Linux?
 
 ```shell
 wget -O- cutt.ly/Arch | bash; ./install
@@ -38,7 +38,6 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - Obtains fastest mirror before install
 - Error log
 
-
 ### List of packages that are always installed without asking
 
 - linux
@@ -63,16 +62,18 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - ~~Better dialog experience~~
 - ~~Option to change DNS server~~
   - The user will set this through Network if he so chooses
-- [NVIDIA DRM kernel modesetting](https://wiki.archlinux.org/index.php/NVIDIA#DRM_kernel_mode_setting)
 - Hibernation
 
 ### Might do
 
 - LUKS encryption
+- [NVIDIA DRM kernel modesetting](https://wiki.archlinux.org/index.php/NVIDIA#DRM_kernel_mode_setting)
+- AMDGPU SI & CIK detection & module paramaters & kernel paramaters
+- HP computer detection on UEFI boot & prompt user that they need to change the "customized boot" option the UEFI
 
 ### Scratched
 
-- Sudo configuration settings  
+- Sudo configuration settings
   - Your user will be added to the wheels group which will have sudo access, which is enough for most people
 
 ### Problems

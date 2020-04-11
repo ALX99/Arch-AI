@@ -14,7 +14,7 @@ Pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrand
 Reqs=(dosfstools fzf arch-install-scripts)
 isUEFI=false
 
-Fzf_Preview="fzf --border --height 50%"
+Fzf_Preview="fzf --border --reverse --height 50%"
 Common_Pkgs='common_pkgs'
 
 usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
@@ -51,7 +51,6 @@ system_check() {
 
     prompt "Updating the package database, please be patient..." yellow
     out pacman -Sy
-    prompt "Updated the package database!" green
 
     prompt "Checking for UEFI..." yellow
     if ls -A /sys/firmware/efi/efivars/ &>/dev/null; then
@@ -107,10 +106,8 @@ installReqs() {
     if ! grep -q Reflector /etc/pacman.d/mirrorlist; then
         prompt "Installing reflector..." yellow
         out pacman -S reflector --needed --noconfirm
-        prompt "Done!" green
         prompt "Generating new pacman mirrors, please be patient..." yellow
         reflector --verbose --latest 150 --sort rate --save /etc/pacman.d/mirrorlist
-        prompt "Done generating mirrors" green
     fi
 
     prompt "Installing additional packages if required..." yellow
@@ -332,10 +329,20 @@ format_fs() {
 
     prompt "Creating partitions..." yellow
     (
-        # Create new GPT partition table for UEFI,
-        # a DOS partition table for BIOS
+        # GPT > MBR
+        echo g
 
-        $isUEFI && echo g && mkpart "+512M" || echo o && mkpart "+200M"
+        if [ $isUEFI ]; then
+            mkpart "+512M"
+            # Define it as a EFI system partition
+            echo t
+            echo 1
+        else
+            mkpart "+200M"
+            # Define it as a BIOS boot partition
+            echo t
+            echo 4
+        fi
 
         mkpart "$SwapSize"
         mkpart "$RootSize"
@@ -343,7 +350,6 @@ format_fs() {
         ([[ $HomeSize -eq 0 ]] && mkpart) || mkpart "$HomeSize"
         echo w
     ) | out fdisk "$fs"
-    prompt "Partitions created!" green
 
     prompt "Formatting partitions..." yellow
     out mkfs.fat -F32 "$bl"
@@ -351,27 +357,22 @@ format_fs() {
     out swapon "$swap"
     out mkfs.ext4 -F "$root"
     out mkfs.ext4 -F "$home"
-    prompt "Formatted partitions!" green
 
     prompt "Setting partition labels..." yellow
     out e2label "$root" ROOT_PART
     out e2label "$home" HOME_PART
     out e2label "$bl" BOOT_PART
-    prompt "Partition labels set!" green
 
     prompt "Mounting $root and ${home}..." yellow
     mount "$root" /mnt
     mkdir /mnt/home
     mount "$home" /mnt/home
-    prompt "Mounting finished!" green
 }
 
 # sequence for creating a new partition
 # 1: size of partition
 mkpart() {
     echo n
-    # Here it asks for the partition type if it is a DOS partition
-    ! $isUEFI && echo p
     echo
     echo
     echo "$1"
@@ -395,7 +396,7 @@ jumpChroot() {
     chmod 554 /mnt/setup
 
     if [[ -n $debug ]]; then
-        less <"$info"
+        less </mnt/info
         read
     fi
 
@@ -410,10 +411,13 @@ arch_install() {
         less <"$errorfile"
         read
     fi
+    prompt "The script will now install and set up your system" green
+    prompt "No further input will be needed" green
+    sleep 2
     prompt "Pacstrapping packages..." yellow
     pacstrap /mnt "${Pacstrap[@]}"
+    prompt "Generating the fstab..." yellow
     genfstab -U /mnt >/mnt/etc/fstab
-    prompt "Finished pacstrapping packages" green
 }
 
 # out logs the errors to the errorfile
