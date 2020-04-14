@@ -20,7 +20,8 @@ usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 
 Flags:
     -h, --help    show this help text
-    -v, --verbose toggle verbose output"
+    -v, --verbose toggle verbose output
+    -d, --debug   toggle a simple debugging mode"
 
 read_arguments() {
     verbose=false
@@ -28,6 +29,9 @@ read_arguments() {
         case "$1" in
         -v | --verbose)
             verbose=true
+            ;;
+        -d | --debug)
+            debug=true
             ;;
         *)
             echo "Error: Unsupported flag $1" >&2
@@ -396,7 +400,6 @@ jumpChroot() {
 
     if [[ -n $debug ]]; then
         less </mnt/info
-        read
     fi
 
     # Launch the setup script
@@ -408,7 +411,6 @@ EOF
 arch_install() {
     if [[ -n $debug ]]; then
         less <"$errorfile"
-        read
     fi
     prompt "The script will now install and set up your system" green
     prompt "No further input will be needed" green
