@@ -2,6 +2,7 @@
 # Sets up the system without any user interaction.
 # All the variables that is needed will be sourced from /info
 # shellcheck disable=SC2154
+# TODO use readlink
 
 user_setup() {
     prompt "Setting up the user $uName..." yellow
@@ -57,7 +58,7 @@ hibernation_setup() {
 }
 
 grub_setup() {
-    if $isUEFI; then
+    if [[ -n $uefi ]]; then
         local mountPoint=/efi
         prompt "Downloading additional dependencies for GRUB with UEFI..." yellow
         out pacman -S --noconfirm --needed efibootmgr

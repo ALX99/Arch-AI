@@ -12,7 +12,6 @@ errorfile="err.txt"
 Pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrandr grub networkmanager git go)
 # Required packages to run this script
 Reqs=(dosfstools fzf arch-install-scripts)
-isUEFI=false
 
 Fzf_Preview="fzf --border --reverse --height 50%"
 Common_Pkgs='common_pkgs'
@@ -54,7 +53,7 @@ system_check() {
 
     prompt "Checking for UEFI..." yellow
     if ls -A /sys/firmware/efi/efivars/ &>/dev/null; then
-        isUEFI=true
+        uefi=true
         prompt "Found UEFI!" green
     fi
 
@@ -305,7 +304,7 @@ get_drive() {
 
 verify() {
     printf "Username: %s\nLocale: %s\nHostname: %s\nDE/WM: %s\n\n" "$uName" "$locale" "$hostname" "$wm"
-    printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$isUEFI"
+    printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$uefi"
     printf "Packages: %s\n" "${Pacstrap[*]}"
     read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] &&
         prompt "Installation cancelled!" red && exit
@@ -332,7 +331,7 @@ format_fs() {
         # GPT > MBR
         echo g
 
-        if [ $isUEFI ]; then
+        if [[ -n $uefi ]]; then
             mkpart "+512M"
             # Define it as a EFI system partition
             echo t
