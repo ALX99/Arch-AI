@@ -5,6 +5,7 @@
 # This file will be forcefully removed when starting this script.
 # Keep this in mind if wanting to change this file for whatever reason
 errorfile="err.txt"
+debugLog="debug_log.txt"
 
 # Packages that will be installed on the system with pacstrap
 # the only things you are allowed to remove here would be git
@@ -348,6 +349,8 @@ format_fs() {
         fi
 
         mkpart "$SwapSize"
+        echo t
+        echo 19
         mkpart "$RootSize"
         # Either fill the rest of the drive, or the chosen amount
         ([[ $HomeSize -eq 0 ]] && mkpart) || mkpart "$HomeSize"
@@ -387,6 +390,7 @@ mkpart() {
 jumpChroot() {
     # Move errors to the new arch installation
     mv "$errorfile" /mnt/"$errorfile"
+    errorfile="/$errorfile"
     # export all the current lowercase
     # variables into an info file
     (
@@ -400,6 +404,8 @@ jumpChroot() {
 
     if [[ -n $debug ]]; then
         less </mnt/info
+        mv "$debugLog" /mnt/"$debugLog"
+        debugLog="/$debugLog"
     fi
 
     # Launch the setup script
@@ -430,7 +436,11 @@ out() {
     # TODO I have no clue why I wrote this
     lines="$(wc -l <$errorfile)"
 
-    ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
+    if [[ -n $debug ]]; then
+        "$@" >>$debugLog 2>&1
+    else
+        ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
+    fi
 
     # TODO I have no clue why I wrote this
     [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
