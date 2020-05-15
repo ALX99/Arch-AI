@@ -34,6 +34,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - yay installation
 - Option to install additional common packages
 - Option to auto-trim mounted SSDs once a week
+- Option to allow multicore AUR builds
 - Locale configuration and generation
 - Obtains fastest mirror before install
 - Error log

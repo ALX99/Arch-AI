@@ -57,6 +57,11 @@ hibernation_setup() {
     mkinitcpio -p linux
 }
 
+aur_multi(){
+    prompt "Enabling full use of all the cores when building from the AUR..." yellow
+    out sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf
+}
+
 grub_setup() {
     if [[ -n $uefi ]]; then
         local mountPoint=/efi
@@ -147,6 +152,7 @@ main() {
 
     [[ -n $wm ]] && wm_setup
     [[ -n $enableSSDTRIM ]] && trim_setup
+    [[ -n $multicoreAURBuild ]] && aur_multi
     [[ -n $enableHibernation ]] && hibernation_setup
 
     # Move the errorfile to the userfolder
