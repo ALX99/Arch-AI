@@ -57,9 +57,13 @@ hibernation_setup() {
     mkinitcpio -p linux
 }
 
-aur_multi(){
-    prompt "Enabling full use of all the cores when building from the AUR..." yellow
+# https://wiki.archlinux.org/index.php/Makepkg#Parallel_compilation
+makepkg_parallel(){
+    prompt "Enabling parallel compilation and compression for makepkg..." yellow
     out sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf
+    out sed -i '/COMPRESSXZ/c\COMPRESSXZ=(xz -c -z - --threads=0)' /etc/makepkg.conf
+    prompt "Enabling optimized compilation for makepkg..." yellow
+    out sed -i '/CFLAGS="-m/c\CFLAGS="-march=native -O2 -pipe -fno-plt"' /etc/makepkg.conf
 }
 
 grub_setup() {
@@ -152,7 +156,7 @@ main() {
 
     [[ -n $wm ]] && wm_setup
     [[ -n $enableSSDTRIM ]] && trim_setup
-    [[ -n $multicoreAURBuild ]] && aur_multi
+    [[ -n $makepkgParallel ]] && makepkg_parallel
     [[ -n $enableHibernation ]] && hibernation_setup
 
     # Move the errorfile to the userfolder

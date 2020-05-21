@@ -211,8 +211,8 @@ get_misc() {
     printf "\n\033[1;34mWould you like to enable kernel parameters to allow for hibernation? [EXPERIMENTAL] (Y/n)\033[0m "
     read -rn 1 && [[ ! $REPLY =~ ^[Nn]$ ]] && enableHibernation=true
 
-    printf "\n\033[1;34mWould you like to enable multicore AUR building? (Y/n)\033[0m "
-    read -rn 1 && [[ ! $REPLY =~ ^[Nn]$ ]] && multicoreAURBuild=true
+    printf "\n\033[1;34mWould you like to enable parallel and optimized compilation&compression for makepkg? (Y/n)\033[0m "
+    read -rn 1 && [[ ! $REPLY =~ ^[Nn]$ ]] && makepkgParallel=true
     printf "\n"
 }
 
@@ -351,6 +351,7 @@ format_fs() {
         fi
 
         mkpart "$SwapSize"
+        # Define it as a Linux Swap partition
         echo t
         echo 19
         mkpart "$RootSize"
@@ -361,15 +362,15 @@ format_fs() {
 
     prompt "Formatting partitions..." yellow
     out mkfs.fat -F32 "$bl"
-    out mkswap -L SWAP_PART "$swap"
+    out mkswap -L SWAP_PARTITION "$swap"
     out swapon "$swap"
     out mkfs.ext4 -F "$root"
     out mkfs.ext4 -F "$home"
 
     prompt "Setting partition labels..." yellow
-    out e2label "$root" ROOT_PART
-    out e2label "$home" HOME_PART
-    out e2label "$bl" BOOT_PART
+    out e2label "$root" ROOT_PARTITION
+    out e2label "$home" HOME_PARTITION
+    out e2label "$bl" BOOT_PARTITION
 
     prompt "Mounting $root and ${home}..." yellow
     mount "$root" /mnt
