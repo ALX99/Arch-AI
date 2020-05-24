@@ -216,26 +216,6 @@ get_misc() {
     printf "\n"
 }
 
-get_wm() {
-    local choice cmd
-    prompt 'Choose a WM/DE' blue
-    wm="$(printf "KDE Plasma\nXFCE 4\ni3-gaps\nNone" | $Fzf_Preview)"
-
-    # Add the WM package to be packstrapped
-    case "$wm" in
-    "i3-gaps")
-        add_pkg i3-gaps
-        add_pkg rxvt-unicode
-        ;;
-    "KDE Plasma")
-        add_pkg plasma
-        ;;
-    "XFCE 4")
-        add_pkg xfce4
-        ;;
-    esac
-}
-
 # Ask for some additional popular packages
 get_pkgs() {
     local choice choices
@@ -310,7 +290,7 @@ get_drive() {
 }
 
 verify() {
-    printf "Username: %s\nLocale: %s\nHostname: %s\nDE/WM: %s\n\n" "$uName" "$locale" "$hostname" "$wm"
+    printf "Username: %s\nLocale: %s\nHostname: %s\n\n" "$uName" "$locale" "$hostname"
     printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$uefi"
     printf "Packages: %s\n" "${Pacstrap[*]}"
     read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] &&
@@ -475,7 +455,6 @@ main() {
     get_config
     get_micro
     get_misc
-    get_wm
     get_pkgs
     get_drive
     verify

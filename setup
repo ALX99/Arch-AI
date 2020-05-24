@@ -101,23 +101,6 @@ yay_setup() {
     cd /
 }
 
-wm_setup() {
-    # Load X resources
-    echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
-
-    case "$wm" in
-    "i3-gaps")
-        echo "exec i3" >>"$userpath".xinitrc
-        ;;
-    "KDE Plasma")
-        echo "exec startplasma-x11" >>"$userpath".xinitrc
-        ;;
-    "XFCE 4")
-        echo "exec startxfce4" >>"$userpath".xinitrc
-        ;;
-    esac
-}
-
 # shellcheck disable=SC2086
 # out logs the errors to the errorfile
 # and then echos output of commands
@@ -154,7 +137,6 @@ main() {
     grub_setup
     yay_setup
 
-    [[ -n $wm ]] && wm_setup
     [[ -n $enableSSDTRIM ]] && trim_setup
     [[ -n $makepkgParallel ]] && makepkg_parallel
     [[ -n $enableHibernation ]] && hibernation_setup
