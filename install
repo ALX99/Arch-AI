@@ -1,11 +1,11 @@
 #!/bin/bash
 # NOTE: Lowercase variables will be exported to a file
-# hence variables I don't care about later start with an uppercase
 
-# This file will be forcefully removed when starting this script.
-# Keep this in mind if wanting to change this file for whatever reason
-errorfile="err.txt"
-debugLog="debug_log.txt"
+# The below files will be forcefully removed when starting this script.
+errorfile="Arch-AI_errors.log"
+# The below two are only used with the deug flag enabled
+debugLog="Arch-AI_debug.log"
+variableLog="Arch-AI_variables.log"
 
 # Packages that will be installed on the system with pacstrap
 # the only things you are allowed to remove here would be git
@@ -45,13 +45,11 @@ read_arguments() {
 }
 
 system_check() {
-    local gpus gpu cpu
+    local gpus gpu
 
     [ $EUID -ne 0 ] &&
         prompt "This script must be run as root" red &&
         exit 1
-
-    prompt "Internet connection found!" green
 
     prompt "Updating the package database, please be patient..." yellow
     out pacman -Sy
@@ -64,6 +62,7 @@ system_check() {
 
     prompt "Identifying GPU drivers..." yellow
     gpus=$(lspci | grep -e VGA -e 3D | tr '[:upper:]' '[:lower:]')
+    log_variable "gpus" "$gpus"
 
     # https://wiki.archlinux.org/index.php/Xorg#Installation
     # https://wiki.archlinux.org/index.php/Hardware_video_acceleration
@@ -122,11 +121,13 @@ installReqs() {
 get_config() {
     local locale_list pass1 pass2 root1 root2
 
+    locale_list="$(grep UTF-8 /etc/locale.gen | awk '{print $1}' | cut -c 2-)"
+    # TODO, the US.UTF-8 option is uncommented in the Arch Linux
+    # live ISO, so for now I'll add it as an option manually
+    locale_list+=$(printf "\nen.US.UTF-8")
+    log_variable "locale_list" "$locale_list"
+
     while [[ -z $locale ]]; do
-        locale_list="$(grep UTF-8 /etc/locale.gen | awk '{print $1}' | cut -c 2-)"
-        # TODO, the US.UTF-8 option is uncommented in the Arch Linux
-        # live ISO, so for now I'll add it as an option manually
-        locale_list+=$(printf "\nen.US.UTF-8")
         prompt "Which locale would you like?" blue
         locale=$(echo "$locale_list" | $Fzf_Preview)
     done
@@ -148,13 +149,16 @@ get_config() {
         iprompt "Confirm password for $uName" true
         pass2="$Reply"
         echo
-        if [ "$pass1" == "$pass2" ]; then
+        if [ -z "$pass1" ]; then
+            prompt "Password left blank, try again." red
+        elif [ "$pass1" == "$pass2" ]; then
             # userPass is written to info file
             # shellcheck disable=SC2034
             userPass="$pass1"
             break
+        else
+            prompt "Passwords do not match, try again." red
         fi
-        prompt "Passwords do not match, try again." red
     done
 
     # Get root password
@@ -165,29 +169,28 @@ get_config() {
         iprompt "Confirm password for the root user" true
         root2="$Reply"
         echo
-        if [ "$root1" == "$root2" ]; then
+        if [ -z "$root1" ]; then
+            prompt "Password left blank, try again." red
+        elif [ "$root1" == "$root2" ]; then
             # userPass is written to info file
             # shellcheck disable=SC2034
             rootPW="$root1"
             break
+        else
+            prompt "Passwords do not match, try again." red
         fi
-        prompt "Passwords do not match, try again." red
     done
-
-    # shellcheck disable=SC2154
-    if [[ -n $debug ]]; then
-        printf "Username:%s\nHostname:%s\nPassword:%s\nRootPassword:%s\n" "$hostname" "$uName" "$userPass" "$rootPW"
-        read
-    fi
 }
 
 get_micro() {
+    local cpu
     printf "\033[1;34mWould you like to install microcode updates for your CPU? (Y/n)\033[0m "
     read -rn 1 && [[ $REPLY =~ ^[Nn]$ ]] && return
-    printf "\n"
+    echo
 
     prompt "Identifying the CPU drivers..." yellow
     cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
+    log_variable "cpu" "$cpu"
     case "$cpu" in
     *"intel"*)
         prompt "Intel CPU found!" green
@@ -201,6 +204,8 @@ get_micro() {
     esac
 }
 
+# TODO check trim
+# TODO use funciton to ask questions
 # https://wiki.archlinux.org/index.php/Solid_state_drive#TRIM
 # shellcheck disable=SC2034
 get_misc() {
@@ -230,9 +235,7 @@ get_pkgs() {
 # Adds a package to be pacstrapped
 add_pkg() {
     # Add package to list if not already there
-    if [[ ${Pacstrap[*]} != *"$1"* ]]; then
-        Pacstrap+=("$1")
-    fi
+    [[ ${Pacstrap[*]} != *"$1"* ]] && Pacstrap+=("$1")
 }
 
 # Asks which drive arch should be installed to
@@ -241,7 +244,9 @@ get_drive() {
     lsblk
     echo
     drives=$(find /dev/sd*[a-z] | sort)
+    log_variable "drives" "$drives"
     numDrives=$(echo "$drives" | wc -w)
+    log_variable "numDrives" "$numDrives"
 
     echo "$drives" | awk '{print NR,$0}'
     while [[ $choice -le 0 || $choice -gt $numDrives ]]; do
@@ -251,6 +256,7 @@ get_drive() {
     # fs contains the base path to the drive
     # such as /dev/sda
     fs=$(echo "$drives" | sed -n "$choice"p)
+    log_variable "fs" "$fs"
 
     if [[ -z $fs ]]; then
         prompt "Something went wrong!" red
@@ -258,7 +264,6 @@ get_drive() {
     fi
 
     local re='^[0-9]+$'
-
     while ! [[ $RootSize =~ $re ]]; do
         read -r -p "How big should the root partition be [GB]:" RootSize
     done
@@ -276,9 +281,7 @@ get_drive() {
     # so that fdisk can use them
     RootSize="+${RootSize}G"
     SwapSize="+${SwapSize}G"
-    if [ "$HomeSize" != "0" ]; then
-        HomeSize="+${HomeSize}G"
-    fi
+    [ "$HomeSize" != "0" ] && HomeSize="+${HomeSize}G"
 
     # Setup paths to the different
     # partitions on the hard drive
@@ -287,6 +290,10 @@ get_drive() {
     root="${fs}"3
     home="${fs}"4
 
+    log_variable "bl" "$bl"
+    log_variable "swap" "$swap"
+    log_variable "root" "$root"
+    log_variable "home" "$home"
 }
 
 verify() {
@@ -320,23 +327,34 @@ format_fs() {
 
         if [[ -n $uefi ]]; then
             mkpart "+512M"
-            # Define it as a EFI system partition
+            # Set partition type to 'EFI System'
             echo t
             echo 1
         else
             mkpart "+200M"
-            # Define it as a BIOS boot partition
+            # Set partition type to 'BIOS boot'
             echo t
             echo 4
         fi
 
         mkpart "$SwapSize"
-        # Define it as a Linux Swap partition
+        # Set partition type to 'Linux Swap'
         echo t
+        echo 2
         echo 19
+
         mkpart "$RootSize"
+        # Set partition type to 'Linux root (x86-64)'
+        echo t
+        echo 3
+        echo 24
+
         # Either fill the rest of the drive, or the chosen amount
         ([[ $HomeSize -eq 0 ]] && mkpart) || mkpart "$HomeSize"
+        # Set partition type to 'Linux home'
+        echo t
+        echo 4
+        echo 28 # Linux home
         echo w
     ) | out fdisk "$fs"
 
@@ -353,9 +371,9 @@ format_fs() {
     out e2label "$bl" BOOT_PARTITION
 
     prompt "Mounting $root and ${home}..." yellow
-    mount "$root" /mnt
-    mkdir /mnt/home
-    mount "$home" /mnt/home
+    out mount "$root" /mnt
+    out mkdir /mnt/home
+    out mount "$home" /mnt/home
 }
 
 # sequence for creating a new partition
@@ -369,11 +387,18 @@ mkpart() {
     echo "y"
 }
 
+arch_install() {
+    prompt "The script will now install and set up your system" green
+    prompt "No further input will be needed" green
+    sleep 2
+    prompt "Pacstrapping packages..." yellow
+    pacstrap /mnt "${Pacstrap[@]}"
+    prompt "Generating the fstab..." yellow
+    out genfstab -U /mnt >/mnt/etc/fstab
+}
+
 # chroot into the new arch installation
 jumpChroot() {
-    # Move errors to the new arch installation
-    mv "$errorfile" /mnt/"$errorfile"
-    errorfile="/$errorfile"
     # export all the current lowercase
     # variables into an info file
     (
@@ -385,10 +410,14 @@ jumpChroot() {
     cp sharedfuncs /mnt/sharedfuncs
     chmod 554 /mnt/setup
 
+    # Move files to the new arch installation
+    mv "$errorfile" /mnt/"$errorfile"
+    errorfile="/$errorfile"
     if [[ -n $debug ]]; then
-        less </mnt/info
-        mv "$debugLog" /mnt/"$debugLog"
+        mv "$debugLog" "$variableLog" /mnt/"$debugLog"
         debugLog="/$debugLog"
+        variableLog="/$variableLog"
+        less </mnt/info
     fi
 
     # Launch the setup script
@@ -397,36 +426,36 @@ jumpChroot() {
 EOF
 }
 
-arch_install() {
-    if [[ -n $debug ]]; then
-        less <"$errorfile"
-    fi
-    prompt "The script will now install and set up your system" green
-    prompt "No further input will be needed" green
-    sleep 2
-    prompt "Pacstrapping packages..." yellow
-    pacstrap /mnt "${Pacstrap[@]}"
-    prompt "Generating the fstab..." yellow
-    genfstab -U /mnt >/mnt/etc/fstab
-}
-
 # out logs the errors to the errorfile
 # and then echos output of commands
 # if verbose is true
 out() {
+    # TODO add verbose and very verose option
+    # TODO cleanup the things I don't know what they're doing
     local lines
     echo "COMMAND: $*" >>$errorfile
     # TODO I have no clue why I wrote this
     lines="$(wc -l <$errorfile)"
 
     if [[ -n $debug ]]; then
-        "$@" >>$debugLog 2>&1
+        {
+            echo "COMMAND: $*"
+            "$@"
+        } >>$debugLog 2>&1
     else
         ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
     fi
 
     # TODO I have no clue why I wrote this
     [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
+}
+
+# log_variable logs the contents of a variable to the variableLog if the debug flag is set
+# 1: name of variable
+# 2: content
+log_variable() {
+    [[ -n $debug ]] &&
+        printf "=-=-=-=-=-=-=-=-=-=-= %s =-=-=-=-=-=-=-=-=-=-=\n%s\n" "$1" "$2" >>"$variableLog"
 }
 
 # shellcheck disable=SC2178
@@ -446,8 +475,8 @@ iprompt() {
 main() {
     # TODO, will be uncommented when script is stable
     source sharedfuncs
-    # Remove old error file
-    rm -f "$errorfile"
+    # Remove files from previous runs
+    rm -f "$errorfile" "$debugLog" "$variableLog"
     read_arguments "$@"
     prompt "Running in non chrooted mode!" green
     system_check

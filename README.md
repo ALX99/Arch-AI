@@ -50,7 +50,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - grub
 - networkmanager
 - git (required to install yay)
-- go (required to yay)
+- go (required by yay)
 
 ## TODO
 
@@ -61,7 +61,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - ~~Better dialog experience~~
 - ~~Option to change DNS server~~
   - The user will set this through Network if he so chooses
-- Hibernation
+- ~~Hibernation~~
 
 ### Might do
 
