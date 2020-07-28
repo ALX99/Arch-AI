@@ -67,7 +67,8 @@ makepkg_parallel() {
 }
 
 grub_setup() {
-    local mountPoint="/boot"
+    local mountPoint
+    [[ -n $uefi ]] && mountPoint="/efi/" || mountPoint="/boot/"
     out mkdir "$mountPoint"
     out mount "$bl" "$mountPoint"
     if [[ -n $uefi ]]; then
