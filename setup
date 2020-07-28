@@ -109,13 +109,13 @@ out() {
     # TODO I have no clue why I wrote this
     lines="$(wc -l <$errorfile)"
 
-    if [[ -n $debug ]]; then
+    if [[ -n $logging ]]; then
         {
             echo "COMMAND: $*"
             "$@"
-        } >>$debugLog 2>&1
+        } >>"$logFile" 2>&1
     else
-        ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
+        ("$verbose" && "$@" 2>>"$errorfile") || "$@" 1>/dev/null 2>>"$errorfile"
     fi
 
     # TODO I have no clue why I wrote this

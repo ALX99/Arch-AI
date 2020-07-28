@@ -3,8 +3,8 @@
 
 # The below files will be forcefully removed when starting this script.
 errorfile="Arch-AI_errors.log"
-# The below two are only used with the deug flag enabled
-debugLog="Arch-AI_debug.log"
+# The below two are only used with the debug flag enabled
+logFile="Arch-AI_debug.log"
 variableLog="Arch-AI_variables.log"
 
 # Packages that will be installed on the system with pacstrap
@@ -17,12 +17,15 @@ Reqs=(dosfstools fzf arch-install-scripts)
 Fzf_Preview="fzf --border --reverse --height 50%"
 Common_Pkgs='common_pkgs'
 
+# TODO implement these
 usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 
 Flags:
     -h, --help    show this help text
-    -v, --verbose toggle verbose output
-    -d, --debug   toggle a simple debugging mode"
+    -d, --debug   enable debugging mode
+    -l, --logging enable logging (disables -s and -v) 
+    -s, --show    enable showing which commands are run 
+    -v, --verbose enable veryverbose output"
 
 read_arguments() {
     verbose=false
@@ -31,7 +34,11 @@ read_arguments() {
         -v | --verbose)
             verbose=true
             ;;
+        -l | --logging)
+            logging=true
+            ;;
         -d | --debug)
+            logging=true
             debug=true
             ;;
         *)
@@ -414,8 +421,8 @@ jumpChroot() {
     mv "$errorfile" /mnt/"$errorfile"
     errorfile="/$errorfile"
     if [[ -n $debug ]]; then
-        mv "$debugLog" "$variableLog" /mnt/"$debugLog"
-        debugLog="/$debugLog"
+        mv "$logFile" "$variableLog" /mnt/"$logFile"
+        logFile="/$logFile"
         variableLog="/$variableLog"
         less </mnt/info
     fi
@@ -437,13 +444,13 @@ out() {
     # TODO I have no clue why I wrote this
     lines="$(wc -l <$errorfile)"
 
-    if [[ -n $debug ]]; then
+    if [[ -n $logging ]]; then
         {
             echo "COMMAND: $*"
             "$@"
-        } >>$debugLog 2>&1
+        } >>"$logFile" 2>&1
     else
-        ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
+        ("$verbose" && "$@" 2>>"$errorfile") || "$@" 1>/dev/null 2>>"$errorfile"
     fi
 
     # TODO I have no clue why I wrote this
@@ -476,7 +483,7 @@ main() {
     # TODO, will be uncommented when script is stable
     source sharedfuncs
     # Remove files from previous runs
-    rm -f "$errorfile" "$debugLog" "$variableLog"
+    rm -f "$errorfile" "$logFile" "$variableLog"
     read_arguments "$@"
     prompt "Running in non chrooted mode!" green
     system_check
