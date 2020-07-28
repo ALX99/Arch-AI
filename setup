@@ -8,10 +8,10 @@ user_setup() {
     prompt "Setting up the user $uName..." yellow
     out useradd -m -G wheel "$uName"
     sed -i "/%wheel ALL=(ALL) ALL/s/^#//g" /etc/sudoers
-    out echo "$uName:$userPass" | out chpasswd
+    out echo "$uName:$userPass" | chpasswd
 
     prompt "Setting the root password..." yellow
-    out echo "root:$rootPW" | out chpasswd
+    out echo "root:$rootPW" | chpasswd
 }
 
 system_setup() {
@@ -94,7 +94,8 @@ yay_setup() {
     cd "$userpath" || exit
     out su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
     cd yay || exit
-    su -c "makepkg -si" "$uName"
+    su -c "makepkg -s" "$uName"
+    out pacman -U --needed --noconfirm -- *.xz
     cd ..
     rm -rf yay/
     cd /
