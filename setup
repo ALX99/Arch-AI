@@ -99,37 +99,6 @@ yay_setup() {
     cd /
 }
 
-# shellcheck disable=SC2086
-# out logs the errors to the errorfile
-# and then echos output of commands
-# if verbose is true
-out() {
-    local lines
-    echo "COMMAND: $*" >>$errorfile
-    # TODO I have no clue why I wrote this
-    lines="$(wc -l <$errorfile)"
-
-    if [[ -n $logging ]]; then
-        {
-            echo "COMMAND: $*"
-            "$@"
-        } >>"$logFile" 2>&1
-    else
-        ("$verbose" && "$@" 2>>"$errorfile") || "$@" 1>/dev/null 2>>"$errorfile"
-    fi
-
-    # TODO I have no clue why I wrote this
-    [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
-}
-
-# log_variable logs the contents of a variable to the variableLog if the debug flag is set
-# 1: name of variable
-# 2: content
-log_variable() {
-    [[ -n $debug ]] &&
-        printf "=-=-=-=-=-=-=-=-=-=-= %s =-=-=-=-=-=-=-=-=-=-=\n%s\n" "$1" "$2" >>"$variableLog"
-}
-
 main() {
     # Source settings written by install
     # shellcheck disable=SC1091

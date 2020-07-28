@@ -74,7 +74,3 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 
 - Sudo configuration settings
   - Your user will be added to the wheels group which will have sudo access, which is enough for most people
-
-### Problems
-
-The `out` function is the same in both `install` and `setup`, but can't be placed in `sharedfuncs` since it uses variables set by the script. These variables can't be exported in the first script since we'll chroot to a different environment.
