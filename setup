@@ -54,7 +54,7 @@ hibernation_setup() {
         sed -i 's/\<keyboard\>/& resume/' /etc/mkinitcpio.conf # Add the resume hook after the keyboard hook
 
     # Regenerate the initramfs
-    mkinitcpio -p linux
+    out mkinitcpio -p linux
 }
 
 # https://wiki.archlinux.org/index.php/Makepkg#Parallel_compilation
@@ -119,11 +119,15 @@ main() {
     [[ -n $makepkgParallel ]] && makepkg_parallel
 
     # Move files to $HOME
-    out mv "$errorfile" /home/"$uName"/
-    [[ -n $debug ]] && out mv "$debugLog" "$variableLog" /home/"$uName"/
+    if [[ -n $logging ]]; then
+        out mv "$logFile" /home/"$uName"/
+    else
+        mv "$errorfile" /home/"$uName"/
+    fi
+    [[ -n $debug ]] && out mv "$variableLog" /home/"$uName"/
 
-    prompt "Briefly check out the errorlog to make sure that something hasn't gone terribly wrong!" yellow
-    less </home/"$uName"/"$errorfile"
+    prompt "Briefly check out the log files to make sure that something hasn't gone terribly wrong!" yellow
+    ls Arch-AI*
 }
 
 main "$@"

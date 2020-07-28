@@ -3,39 +3,42 @@
 
 # The below files will be forcefully removed when starting this script.
 errorfile="Arch-AI_errors.log"
-# The below two are only used with the debug flag enabled
-logFile="Arch-AI_debug.log"
+logFile="Arch-AI.log"
 variableLog="Arch-AI_variables.log"
+tmpOut="/tmp/out"
+tmpErr="/tmp/err"
 
 # Packages that will be installed on the system with pacstrap
 # the only things you are allowed to remove here would be git
 # removing other things might break the setup procedure
-Pacstrap=(linux linux-firmware base base-devel xorg-server xorg-xinit xorg-xrandr grub networkmanager git go)
+Pacstrap=(linux linux-firmware base base-devel grub networkmanager git go)
 # Required packages to run this script
 Reqs=(dosfstools fzf arch-install-scripts)
 
 Fzf_Preview="fzf --border --reverse --height 50%"
 Common_Pkgs='common_pkgs'
 
-# TODO implement these
 usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 
 Flags:
     -h, --help    show this help text
-    -d, --debug   enable debugging mode
+    -d, --debug   enable debugging mode (enables -l)
     -l, --logging enable logging (disables -s and -v) 
     -s, --show    enable showing which commands are run 
-    -v, --verbose enable veryverbose output"
+    -v, --verbose enable output (enables -s)"
 
 read_arguments() {
-    verbose=false
     while (("$#")); do
         case "$1" in
         -v | --verbose)
+            show=true
             verbose=true
             ;;
         -l | --logging)
             logging=true
+            ;;
+        -s | --show)
+            show=true
             ;;
         -d | --debug)
             logging=true
@@ -139,10 +142,10 @@ get_config() {
         locale=$(echo "$locale_list" | $Fzf_Preview)
     done
     while true; do
-        iprompt "What hostname would you like?" false
+        iprompt "What hostname would you like:"
         # shellcheck disable=SC2154
         hostname="$Reply"
-        iprompt "What username would you like?" false
+        iprompt "What username would you like:"
         uName="$Reply"
         [[ -n $uName && -n $hostname ]] && break
         prompt "Username, hostname or the root password was left blank, try again." red
@@ -150,10 +153,10 @@ get_config() {
 
     # Get user password
     while true; do
-        iprompt "What password would you like for ${uName}?" true
+        iprompt "What password would you like for ${uName}:" silent
         pass1="$Reply"
         echo
-        iprompt "Confirm password for $uName" true
+        iprompt "Confirm password for $uName:" silent
         pass2="$Reply"
         echo
         if [ -z "$pass1" ]; then
@@ -170,10 +173,10 @@ get_config() {
 
     # Get root password
     while true; do
-        iprompt "What password would you like for the root user?" true
+        iprompt "What password would you like for the root user:" silent
         root1="$Reply"
         echo
-        iprompt "Confirm password for the root user" true
+        iprompt "Confirm password for the root user:" silent
         root2="$Reply"
         echo
         if [ -z "$root1" ]; then
@@ -191,9 +194,7 @@ get_config() {
 
 get_micro() {
     local cpu
-    printf "\033[1;34mWould you like to install microcode updates for your CPU? (Y/n)\033[0m "
-    read -rn 1 && [[ $REPLY =~ ^[Nn]$ ]] && return
-    echo
+    ! Ynprompt "Would you like to install microcode updates for your CPU?" && return
 
     prompt "Identifying the CPU drivers..." yellow
     cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
@@ -212,20 +213,17 @@ get_micro() {
 }
 
 # TODO check trim
-# TODO use funciton to ask questions
 # https://wiki.archlinux.org/index.php/Solid_state_drive#TRIM
 # shellcheck disable=SC2034
 get_misc() {
-    printf "\033[1;34mWould you like to auto-trim your mounted SSDs once a week? (Y/n)\033[0m "
-    read -rn 1 && [[ ! $REPLY =~ ^[Nn]$ ]] && enableSSDTRIM=true &&
-        add_pkg util-linux
+    Ynprompt "Would you like to auto-trim your mounted SSDs once a week?" &&
+        enableSSDTRIM=true && add_pkg util-linux
 
-    printf "\n\033[1;34mWould you like to enable kernel parameters to allow for hibernation? [EXPERIMENTAL] (Y/n)\033[0m "
-    read -rn 1 && [[ ! $REPLY =~ ^[Nn]$ ]] && enableHibernation=true
+    Ynprompt "Would you like to enable kernel parameters to allow for hibernation?" &&
+        enableHibernation=true
 
-    printf "\n\033[1;34mWould you like to enable parallel and optimized compilation&compression for makepkg? (Y/n)\033[0m "
-    read -rn 1 && [[ ! $REPLY =~ ^[Nn]$ ]] && makepkgParallel=true
-    printf "\n"
+    Ynprompt "Would you like to enable parallel and optimized compilation&compression for makepkg?" &&
+        makepkgParallel=true
 }
 
 # Ask for some additional popular packages
@@ -248,6 +246,7 @@ add_pkg() {
 # Asks which drive arch should be installed to
 get_drive() {
     local drives numDrives choice
+    local re='^[0-9]+$'
     lsblk
     echo
     drives=$(find /dev/sd*[a-z] | sort)
@@ -256,8 +255,9 @@ get_drive() {
     log_variable "numDrives" "$numDrives"
 
     echo "$drives" | awk '{print NR,$0}'
-    while [[ $choice -le 0 || $choice -gt $numDrives ]]; do
-        read -r -p "Which drive would you like to install Arch on [1-$numDrives]: " choice
+    while ! [[ $choice =~ $re ]] || [[ $choice -le 0 || $choice -gt $numDrives ]]; do
+        iprompt "Which drive would you like to install Arch on [1-$numDrives]: "
+        choice="$Reply"
     done
 
     # fs contains the base path to the drive
@@ -270,25 +270,30 @@ get_drive() {
         exit 1
     fi
 
-    local re='^[0-9]+$'
     while ! [[ $RootSize =~ $re ]]; do
-        read -r -p "How big should the root partition be [GB]:" RootSize
+        iprompt "How big should the root partition be [GB]:"
+        RootSize="$Reply"
     done
 
     while ! [[ $SwapSize =~ $re ]]; do
-        read -r -p "How big should the swap partition be [GB]:" SwapSize
+        iprompt "How big should the swap partition be [GB]:"
+        SwapSize="$Reply"
     done
 
     while ! [[ $HomeSize =~ $re ]]; do
         prompt "Type 0 to fill the remaining space on the disk selected" yellow
-        read -r -p "Type out the size of the home partition [GB]:" HomeSize
+        iprompt "Type out the size of the home partition [GB]:"
+        HomeSize="$Reply"
     done
 
     # Set formatting of the variables
     # so that fdisk can use them
     RootSize="+${RootSize}G"
     SwapSize="+${SwapSize}G"
-    [ "$HomeSize" != "0" ] && HomeSize="+${HomeSize}G"
+    [[ $HomeSize != 0 ]] && HomeSize="+${HomeSize}G"
+    log_variable "RootSize" "$RootSize"
+    log_variable "SwapSize" "$SwapSize"
+    log_variable "HomeSize" "$HomeSize"
 
     # Setup paths to the different
     # partitions on the hard drive
@@ -375,7 +380,6 @@ format_fs() {
     prompt "Setting partition labels..." yellow
     out e2label "$root" ROOT_PARTITION
     out e2label "$home" HOME_PARTITION
-    out e2label "$bl" BOOT_PARTITION
 
     prompt "Mounting $root and ${home}..." yellow
     out mount "$root" /mnt
@@ -401,7 +405,7 @@ arch_install() {
     prompt "Pacstrapping packages..." yellow
     pacstrap /mnt "${Pacstrap[@]}"
     prompt "Generating the fstab..." yellow
-    out genfstab -U /mnt >/mnt/etc/fstab
+    genfstab -U /mnt >/mnt/etc/fstab
 }
 
 # chroot into the new arch installation
@@ -418,13 +422,17 @@ jumpChroot() {
     chmod 554 /mnt/setup
 
     # Move files to the new arch installation
-    mv "$errorfile" /mnt/"$errorfile"
-    errorfile="/$errorfile"
-    if [[ -n $debug ]]; then
-        mv "$logFile" "$variableLog" /mnt/"$logFile"
+    if [[ -n $logging ]]; then
+        mv "$logFile" /mnt/
         logFile="/$logFile"
+    else
+        mv "$errorfile" /mnt/
+        errorfile="/$errorfile"
+    fi
+    if [[ -n $debug ]]; then
+        mv "$variableLog" /mnt/
         variableLog="/$variableLog"
-        less </mnt/info
+        #less </mnt/info
     fi
 
     # Launch the setup script
@@ -433,25 +441,37 @@ jumpChroot() {
 EOF
 }
 
-# shellcheck disable=SC2178
-# shellcheck disable=SC2179
-# shellcheck disable=SC2128
 # Interactive prompt, reads the reply to the $Reply variable
 # 1: message
-# 2: [true, false] silent mode
+# 2: set to enable silent mode
 iprompt() {
-    local cmd
-    printf "\033[1;34m%s: \033[0m" "$1"
-    cmd="read -r"
-    $2 && cmd+="s"
-    $cmd Reply
+    prompt "$1 " blue true
+    if [[ -n $2 ]]; then
+        read -rs Reply
+    else
+        read -r Reply
+    fi
+}
+
+# Y/n prompt, returns 0 if ansewr is anything except n or N
+# 1: message
+Ynprompt() {
+    prompt "$1 (Y/n) " blue true
+    read -rn 1
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        echo -e "\e[1Dn"
+        return 1
+    else
+        echo -e "\e[1DY"
+        return 0
+    fi
 }
 
 main() {
     # TODO, will be uncommented when script is stable
     source sharedfuncs
     # Remove files from previous runs
-    rm -f "$errorfile" "$logFile" "$variableLog"
+    rm -f "$errorfile" "$logFile" "$variableLog" "$tmpOut" "$tmpErr"
     read_arguments "$@"
     prompt "Running in non chrooted mode!" green
     system_check
