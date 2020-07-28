@@ -1,7 +1,7 @@
 if [ -z "$dev" ]; then
 echo "Downloading from the master branch"
-wget https://raw.githubusercontent.com/alx99/arch-ai/master/sharedfuncs;wget https://raw.githubusercontent.com/alx99/arch-ai/master/common_pkgs;wget https://raw.githubusercontent.com/alx99/arch-ai/master/setup;wget https://raw.githubusercontent.com/alx99/arch-ai/master/install;chmod +x install
+curl -O https://raw.githubusercontent.com/alx99/arch-ai/master/sharedfuncs;curl -O https://raw.githubusercontent.com/alx99/arch-ai/master/common_pkgs;curl -O https://raw.githubusercontent.com/alx99/arch-ai/master/setup;curl -O https://raw.githubusercontent.com/alx99/arch-ai/master/install;chmod +x install
 else
 echo "Downloading from the develop branch"
-wget https://raw.githubusercontent.com/ALX99/arch-ai/develop/sharedfuncs;wget https://raw.githubusercontent.com/alx99/arch-ai/develop/common_pkgs;wget https://raw.githubusercontent.com/alx99/arch-ai/develop/setup;wget https://raw.githubusercontent.com/alx99/arch-ai/develop/install;chmod +x install
+curl -O https://raw.githubusercontent.com/ALX99/arch-ai/develop/sharedfuncs;curl -O https://raw.githubusercontent.com/alx99/arch-ai/develop/common_pkgs;curl -O https://raw.githubusercontent.com/alx99/arch-ai/develop/setup;curl -O https://raw.githubusercontent.com/alx99/arch-ai/develop/install;chmod +x install
 fi

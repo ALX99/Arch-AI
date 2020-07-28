@@ -120,11 +120,11 @@ main() {
 
     # Move files to $HOME
     if [[ -n $logging ]]; then
-        out mv "$logFile" /home/"$uName"/
+        mv "$logFile" /home/"$uName"/
     else
         mv "$errorfile" /home/"$uName"/
     fi
-    [[ -n $debug ]] && out mv "$variableLog" /home/"$uName"/
+    [[ -n $debug ]] && mv "$variableLog" /home/"$uName"/
 
     prompt "Briefly check out the log files to make sure that something hasn't gone terribly wrong!" yellow
     ls Arch-AI*

@@ -116,7 +116,7 @@ system_check() {
 # Installs missing requirements for this script (if any)
 # and updates the mirrorlist if needed
 installReqs() {
-    if ! grep -q Reflector /etc/pacman.d/mirrorlist; then
+    if ! grep -q "Last Check" /etc/pacman.d/mirrorlist; then
         prompt "Installing reflector..." yellow
         out pacman -S reflector --needed --noconfirm
         prompt "Generating new pacman mirrors, please be patient..." yellow
