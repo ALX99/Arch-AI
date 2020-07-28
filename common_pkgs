@@ -1,5 +1,11 @@
-pulseaudio PulseAudio
-alsa-utils Alsa Utils
-neovim NeoVim
-nano Nano
-openssh OpenSSH
+pulseaudio
+alsa-utils
+neovim
+nano
+openssh
+linux-lts
+mlocate
+noto-fonts
+ttf-fira-code
+ttf-cascadia-code
+xorg-xbacklight

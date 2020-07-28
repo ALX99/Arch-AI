@@ -2,18 +2,16 @@
 # Sets up the system without any user interaction.
 # All the variables that is needed will be sourced from /info
 # shellcheck disable=SC2154
+# TODO use readlink
 
 user_setup() {
     prompt "Setting up the user $uName..." yellow
-    useradd -m -G wheel "$uName"
+    out useradd -m -G wheel "$uName"
     sed -i "/%wheel ALL=(ALL) ALL/s/^#//g" /etc/sudoers
-    echo "$uName:$userPass" | out chpasswd
-    prompt "Finished setting up the user ${uName}!" green
+    out echo "$uName:$userPass" | out chpasswd
 
     prompt "Setting the root password..." yellow
-    echo "root:$rootPW" | out chpasswd
-    prompt "Set the root password!" green
-
+    out echo "root:$rootPW" | out chpasswd
 }
 
 system_setup() {
@@ -22,52 +20,71 @@ system_setup() {
     out systemctl enable NetworkManager
 
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
+    log_variable "timeZ" "$timeZ"
+    prompt "Setting up the timezone: $timeZ..." yellow
     out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
     out timedatectl set-timezone "$timeZ"
-    # Enable Network Time Protocol (NPT) synchronization
-    timedatectl set-ntp true
-    # Write the current software clock time to thehardware clock
-    hwclock --systohc
+    # Enable Network Time Protocol (NTP) synchronization
+    out timedatectl set-ntp true
+    # Write the current software clock time to the hardware clock
+    out hwclock --systohc
+
+    # TODO double locale problem
+    prompt "Setting up the locale: $locale..." yellow
     sed -i "/$locale/s/^#//g" /etc/locale.gen
-    localectl set-locale LANG="$locale"
+    out localectl set-locale LANG="$locale"
     out locale-gen
 
+    prompt "Setting up the hostname: $hostname..." yellow
     echo "$hostname" >/etc/hostname
-    echo -e "127.0.0.1\t$hostname\n::1\t$hostname\n127.0.1.1\t$hostname.local\t$hostname" >/etc/hosts
-    prompt "Finished setting up the system!" green
+    printf "127.0.0.1\tlocalhost\n::1\tlocalhost\n127.0.1.1	%s.localdomain	%s" "$hostname" "$hostname" >/etc/hosts
+}
+
+trim_setup() {
+    prompt "Enabling auto-trimming of SSDs..." yellow
+    out systemctl enable fstrim.timer
+}
+
+hibernation_setup() {
+    prompt "Modifying kernel parameters to allow for hibernation..." yellow
+    swapUUID=$(blkid -s UUID -o value "$swap")
+    log_variable "swapUUID" "$swapUUID"
+    # Modify kernel parameters and initramfs hooks
+    sed -i "/GRUB_CMDLINE_LINUX=/c\GRUB_CMDLINE_LINUX=\"resume=UUID=$swapUUID\"" /etc/default/grub &&
+        sed -i 's/\<keyboard\>/& resume/' /etc/mkinitcpio.conf # Add the resume hook after the keyboard hook
+
+    # Regenerate the initramfs
+    out mkinitcpio -p linux
+}
+
+# https://wiki.archlinux.org/index.php/Makepkg#Parallel_compilation
+makepkg_parallel() {
+    prompt "Enabling parallel compilation and compression for makepkg..." yellow
+    out sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf
+    out sed -i '/COMPRESSXZ/c\COMPRESSXZ=(xz -c -z - --threads=0)' /etc/makepkg.conf
+    prompt "Enabling optimized compilation for makepkg..." yellow
+    out sed -i '/CFLAGS="-m/c\CFLAGS="-march=native -O2 -pipe -fno-plt"' /etc/makepkg.conf
 }
 
 grub_setup() {
-    if $isUEFI; then
+    local mountPoint="/boot"
+    out mkdir "$mountPoint"
+    out mount "$bl" "$mountPoint"
+    if [[ -n $uefi ]]; then
         prompt "Downloading additional dependencies for GRUB with UEFI..." yellow
         out pacman -S --noconfirm --needed efibootmgr
-        prompt "Installing and configuring GRUB for UEFI, this might take a while..." yellow
-        out mkdir /boot/efi
-        out mount "$bl" /boot/efi
-        out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory=/boot/efi
-        out grub-mkconfig -o /boot/grub/grub.cfg
-        # Improve the chances of EFI recognizing the OS
-        out mkdir /boot/efi/EFI/BOOT
-        out cp /boot/efi/EFI/GRUB/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
-        printf "bcf boot add 1 FS0:\\\EFI\\GRUB\\grubx64.efi\nexit" >/boot/efi/startup.nsh
+        prompt "Installing GRUB for UEFI, this might take a while..." yellow
+
+        # https://wiki.archlinux.org/index.php/GRUB#Installation_2
+        # This currently installs it to $mountPoint/EFI/BOOT/BOOTX64.EFI (the default/fallback boot path) which might remove the Windows EFI executable there
+        out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
     else
         # This hasn't been tested
-        prompt "Installing and configuring GRUB for BIOS, this might take a while..." yellow
-        out mount "$bl" /boot/
+        prompt "Installing GRUB for BIOS, this might take a while..." yellow
         out grub-install --target=i386-pc "$fs"
-        out grub-mkconfig -o /boot/grub/grub.cfg
     fi
-    umount "$bl"
-
-    # TODO, not done
-    # Furthermore this might be possible to do before the grub
-    #prompt "Enabling hibernation..." yellow
-    #swapUUID=$(blkid -s UUID -o value "$swap")
-    #sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/d' /etc/default/grub &&
-    #printf 'GRUB_CMDLINE_LINUX_DEFAULT="resume=UUID=%s quiet' "$swapUUID" >>/etc/default/grub
-    # TODO Configure kernel parameter
-
-    prompt "Finished configuring GRUB!" green
+    out grub-mkconfig -o /boot/grub/grub.cfg
+    out umount "$bl"
 }
 # Sets up yay
 yay_setup() {
@@ -80,40 +97,6 @@ yay_setup() {
     cd ..
     rm -rf yay/
     cd /
-    prompt "Finished installing yay!" green
-}
-
-wm_setup() {
-    # Load X resources
-    echo "xrdb -load ~/.Xresources &" >"$userpath".xinitrc
-
-    case "$wm" in
-    "i3-gaps")
-        echo "exec i3" >>"$userpath".xinitrc
-        ;;
-    "KDE Plasma")
-        echo "exec startplasma-x11" >>"$userpath".xinitrc
-        ;;
-    "XFCE 4")
-        echo "exec startxfce4" >>"$userpath".xinitrc
-        ;;
-    esac
-}
-
-# shellcheck disable=SC2086
-# out logs the errors to the errorfile
-# and then echos output of commands
-# if verbose is true
-out() {
-    local lines
-    echo "COMMAND: $*" >>$errorfile
-    # TODO I have no clue why I wrote this
-    lines="$(wc -l <$errorfile)"
-
-    ("$verbose" && "$@" 2>>$errorfile) || "$@" 1>/dev/null 2>>$errorfile
-
-    # TODO I have no clue why I wrote this
-    [ "$lines" == "$(wc -l <$errorfile)" ] && sed -i '$ d' $errorfile
 }
 
 main() {
@@ -122,24 +105,29 @@ main() {
     source /info
     source /sharedfuncs
     # Shred file since it contains sensative info
-    shred -n25 --remove /info
-    # Update errorfile path
-    errorfile='/'$errorfile
+    out shred -n25 --remove /info
 
     prompt "Running in chrooted mode!" green
     user_setup
     system_setup
+    # This modifies the grub config, so we'll run this before configuring grub
+    [[ -n $enableHibernation ]] && hibernation_setup
     grub_setup
     yay_setup
 
-    # Setup wm if WM isn't empty
-    [[ -n $wm ]] && wm_setup
+    [[ -n $enableSSDTRIM ]] && trim_setup
+    [[ -n $makepkgParallel ]] && makepkg_parallel
 
-    # Move the errorfile to the userfolder
-    mv "$errorfile" /home/"$uName"/
+    # Move files to $HOME
+    if [[ -n $logging ]]; then
+        out mv "$logFile" /home/"$uName"/
+    else
+        mv "$errorfile" /home/"$uName"/
+    fi
+    [[ -n $debug ]] && out mv "$variableLog" /home/"$uName"/
 
-    prompt "Briefly check out the errorlog to make sure that something hasn't gone terribly wrong!" yellow
-    less </home/"$uName"/"$errorfile"
+    prompt "Briefly check out the log files to make sure that something hasn't gone terribly wrong!" yellow
+    ls Arch-AI*
 }
 
 main "$@"
