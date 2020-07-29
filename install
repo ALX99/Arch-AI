@@ -61,16 +61,14 @@ system_check() {
         prompt "This script must be run as root" error &&
         exit 1
 
-    prompt "Updating the package database, please be patient" progress
-    out pacman -Sy
-
-    prompt "Checking for UEFI" progress
+    prompt "Checking for UEFI" work
     if ls -A /sys/firmware/efi/efivars/ &>/dev/null; then
         uefi=true
         prompt "Found UEFI" green
     fi
+    work_done
 
-    prompt "Identifying GPU drivers" progress
+    prompt "Identifying GPU drivers" work
     gpus=$(lspci | grep -e VGA -e 3D | tr '[:upper:]' '[:lower:]')
     log_variable "gpus" "$gpus"
 
@@ -111,22 +109,27 @@ system_check() {
             ;;
         esac
     done
+    work_done
 }
 
 # Installs missing requirements for this script (if any)
 # and updates the mirrorlist if needed
 installReqs() {
-    prompt "Upading package database" progress
+    prompt "Upading package database" work
     out pacman -Sy
+    work_done
     if ! grep -q "Last Check" /etc/pacman.d/mirrorlist; then
-        prompt "Installing reflector" progress
+        prompt "Installing reflector" work
         out pacman -S reflector --needed --noconfirm
-        prompt "Generating new pacman mirrors, please be patient" progress
+        work_done
+        prompt "Generating new pacman mirrors, please be patient" work
         reflector --verbose --latest 150 --sort rate --save /etc/pacman.d/mirrorlist
+        work_done
     fi
 
-    prompt "Installing additional packages if required" progress
+    prompt "Installing additional packages if required" work
     out pacman -S "${Reqs[@]}" --needed --noconfirm
+    work_done
 }
 
 # Get username, hostname, password, locale
@@ -198,7 +201,7 @@ get_micro() {
     local cpu
     ! Ynprompt "Would you like to install microcode updates for your CPU?" && return
 
-    prompt "Identifying the CPU drivers" progress
+    prompt "Identifying the CPU drivers" work
     cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
     log_variable "cpu" "$cpu"
     case "$cpu" in
@@ -212,6 +215,7 @@ get_micro() {
         add_pkg amd-ucode
         ;;
     esac
+    work_done
 }
 
 # TODO check trim
@@ -334,7 +338,7 @@ format_fs() {
     # Wipe drive
     out wipefs -a "$fs"
 
-    prompt "Creating partitions" progress
+    prompt "Creating partitions" work
     (
         # GPT > MBR
         echo g
@@ -371,22 +375,26 @@ format_fs() {
         echo 28 # Linux home
         echo w
     ) | out fdisk "$fs"
+    work_done
 
-    prompt "Formatting partitions" progress
+    prompt "Formatting partitions" work
     out mkfs.fat -F32 "$bl"
     out mkswap -L SWAP_PARTITION "$swap"
     out swapon "$swap"
     out mkfs.ext4 -F "$root"
     out mkfs.ext4 -F "$home"
+    work_done
 
-    prompt "Setting partition labels" progress
+    prompt "Setting partition labels" work
     out e2label "$root" ROOT_PARTITION
     out e2label "$home" HOME_PARTITION
+    work_done
 
-    prompt "Mounting $root and ${home}" progress
+    prompt "Mounting $root and ${home}" work
     out mount "$root" /mnt
     out mkdir /mnt/home
     out mount "$home" /mnt/home
+    work_done
 }
 
 # sequence for creating a new partition
@@ -404,10 +412,12 @@ arch_install() {
     prompt "The script will now install and set up your system" green
     prompt "No further input will be needed" green
     sleep 2
-    prompt "Pacstrapping packages" progress
+    prompt "Pacstrapping packages" work
     pacstrap /mnt "${Pacstrap[@]}"
-    prompt "Generating the fstab" progress
+    work_done
+    prompt "Generating the fstab" work
     genfstab -U /mnt >/mnt/etc/fstab
+    work_done
 }
 
 # chroot into the new arch installation

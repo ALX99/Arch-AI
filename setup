@@ -4,65 +4,77 @@
 # shellcheck disable=SC2154
 
 user_setup() {
-    prompt "Setting up the user $uName" progress
+    prompt "Setting up the user $uName" work
     out useradd -m -G wheel "$uName"
     sed -i "/%wheel ALL=(ALL) ALL/s/^#//g" /etc/sudoers
     out echo "$uName:$userPass" | chpasswd
+    work_done
 
-    prompt "Setting up the root password" progress
+    prompt "Setting up the root password" work
     out echo "root:$rootPW" | chpasswd
+    work_done
 }
 
 system_setup() {
     local timeZ
-    prompt "Setting up the system" progress
+    prompt "Setting up the system" work
     out systemctl enable NetworkManager
+    work_done
 
+    prompt "Setting up the timezone: $timeZ" work
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
     log_variable "timeZ" "$timeZ"
-    prompt "Setting up the timezone: $timeZ" progress
     out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
     out timedatectl set-timezone "$timeZ"
     # Enable Network Time Protocol (NTP) synchronization
     out timedatectl set-ntp true
     # Write the current software clock time to the hardware clock
     out hwclock --systohc
+    work_done
 
     # TODO double locale problem
-    prompt "Setting up the locale: $locale" progress
+    prompt "Setting up the locale: $locale" work
     sed -i "/$locale/s/^#//g" /etc/locale.gen
     out localectl set-locale LANG="$locale"
     out locale-gen
+    work_done
 
-    prompt "Setting up the hostname: $hostname" progress
+    prompt "Setting up the hostname: $hostname" work
     echo "$hostname" >/etc/hostname
     printf "127.0.0.1\tlocalhost\n::1\tlocalhost\n127.0.1.1	%s.localdomain	%s" "$hostname" "$hostname" >/etc/hosts
+    work_done
 }
 
 trim_setup() {
-    prompt "Enabling auto-trimming of SSDs" progress
+    prompt "Enabling auto-trimming of SSDs" work
     out systemctl enable fstrim.timer
+    work_done
 }
 
 hibernation_setup() {
-    prompt "Modifying kernel parameters to allow for hibernation" progress
+    prompt "Modifying kernel parameters to allow for hibernation" work
     swapUUID=$(blkid -s UUID -o value "$swap")
     log_variable "swapUUID" "$swapUUID"
     # Modify kernel parameters and initramfs hooks
     sed -i "/GRUB_CMDLINE_LINUX=/c\GRUB_CMDLINE_LINUX=\"resume=UUID=$swapUUID\"" /etc/default/grub &&
         sed -i 's/\<keyboard\>/& resume/' /etc/mkinitcpio.conf # Add the resume hook after the keyboard hook
+    work_done
 
-    # Regenerate the initramfs
+    prompt "Regenerating the initramfs" work
     out mkinitcpio -p linux
+    work_done
 }
 
 # https://wiki.archlinux.org/index.php/Makepkg#Parallel_compilation
 makepkg_parallel() {
-    prompt "Enabling parallel compilation and compression for makepkg" progress
+    prompt "Enabling parallel compilation and compression for makepkg" work
     out sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf
     out sed -i '/COMPRESSXZ/c\COMPRESSXZ=(xz -c -z - --threads=0)' /etc/makepkg.conf
-    prompt "Enabling optimized compilation for makepkg" progress
+    work_done
+
+    prompt "Enabling optimized compilation for makepkg" work
     out sed -i '/CFLAGS="-m/c\CFLAGS="-march=native -O2 -pipe -fno-plt"' /etc/makepkg.conf
+    work_done
 }
 
 grub_setup() {
@@ -71,24 +83,31 @@ grub_setup() {
     out mkdir "$mountPoint"
     out mount "$bl" "$mountPoint"
     if [[ -n $uefi ]]; then
-        prompt "Downloading additional dependencies for GRUB with UEFI" progress
+        prompt "Downloading additional dependencies for GRUB with UEFI" work
         out pacman -S --noconfirm --needed efibootmgr
-        prompt "Installing GRUB for UEFI" progress
+        work_done
 
+        prompt "Installing GRUB for UEFI" work
         # https://wiki.archlinux.org/index.php/GRUB#Installation_2
         # This currently installs it to $mountPoint/EFI/BOOT/BOOTX64.EFI (the default/fallback boot path) which might remove the Windows EFI executable there
         out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
+        work_done
     else
         # This hasn't been tested
-        prompt "Installing GRUB for BIOS" progress
+        prompt "Installing GRUB for BIOS" work
         out grub-install --target=i386-pc "$fs"
+        work_done
     fi
+
+    prompt "Generating GRUB config" work
     out grub-mkconfig -o /boot/grub/grub.cfg
+    work_done
+
     out umount "$bl"
 }
 # Sets up yay
 yay_setup() {
-    prompt "Installing yay" progress
+    prompt "Installing yay" work
     userpath=/home/"$uName"/
     cd "$userpath" || exit
     out su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
@@ -98,10 +117,11 @@ yay_setup() {
     cd ..
     rm -rf yay/
     cd /
+    work_done
 }
 
 main() {
-    # Source settings written by install
+    # /info is written by the install script
     # shellcheck disable=SC1091
     source /info
     source /sharedfuncs
