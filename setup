@@ -4,23 +4,23 @@
 # shellcheck disable=SC2154
 
 user_setup() {
-    prompt "Setting up the user $uName..." yellow
+    prompt "Setting up the user $uName" progress
     out useradd -m -G wheel "$uName"
     sed -i "/%wheel ALL=(ALL) ALL/s/^#//g" /etc/sudoers
     out echo "$uName:$userPass" | chpasswd
 
-    prompt "Setting up the root password..." yellow
+    prompt "Setting up the root password" progress
     out echo "root:$rootPW" | chpasswd
 }
 
 system_setup() {
     local timeZ
-    prompt "Setting up the system..." yellow
+    prompt "Setting up the system" progress
     out systemctl enable NetworkManager
 
     timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
     log_variable "timeZ" "$timeZ"
-    prompt "Setting up the timezone: $timeZ..." yellow
+    prompt "Setting up the timezone: $timeZ" progress
     out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
     out timedatectl set-timezone "$timeZ"
     # Enable Network Time Protocol (NTP) synchronization
@@ -29,23 +29,23 @@ system_setup() {
     out hwclock --systohc
 
     # TODO double locale problem
-    prompt "Setting up the locale: $locale..." yellow
+    prompt "Setting up the locale: $locale" progress
     sed -i "/$locale/s/^#//g" /etc/locale.gen
     out localectl set-locale LANG="$locale"
     out locale-gen
 
-    prompt "Setting up the hostname: $hostname..." yellow
+    prompt "Setting up the hostname: $hostname" progress
     echo "$hostname" >/etc/hostname
     printf "127.0.0.1\tlocalhost\n::1\tlocalhost\n127.0.1.1	%s.localdomain	%s" "$hostname" "$hostname" >/etc/hosts
 }
 
 trim_setup() {
-    prompt "Enabling auto-trimming of SSDs..." yellow
+    prompt "Enabling auto-trimming of SSDs" progress
     out systemctl enable fstrim.timer
 }
 
 hibernation_setup() {
-    prompt "Modifying kernel parameters to allow for hibernation..." yellow
+    prompt "Modifying kernel parameters to allow for hibernation" progress
     swapUUID=$(blkid -s UUID -o value "$swap")
     log_variable "swapUUID" "$swapUUID"
     # Modify kernel parameters and initramfs hooks
@@ -58,10 +58,10 @@ hibernation_setup() {
 
 # https://wiki.archlinux.org/index.php/Makepkg#Parallel_compilation
 makepkg_parallel() {
-    prompt "Enabling parallel compilation and compression for makepkg..." yellow
+    prompt "Enabling parallel compilation and compression for makepkg" progress
     out sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf
     out sed -i '/COMPRESSXZ/c\COMPRESSXZ=(xz -c -z - --threads=0)' /etc/makepkg.conf
-    prompt "Enabling optimized compilation for makepkg..." yellow
+    prompt "Enabling optimized compilation for makepkg" progress
     out sed -i '/CFLAGS="-m/c\CFLAGS="-march=native -O2 -pipe -fno-plt"' /etc/makepkg.conf
 }
 
@@ -71,16 +71,16 @@ grub_setup() {
     out mkdir "$mountPoint"
     out mount "$bl" "$mountPoint"
     if [[ -n $uefi ]]; then
-        prompt "Downloading additional dependencies for GRUB with UEFI..." yellow
+        prompt "Downloading additional dependencies for GRUB with UEFI" progress
         out pacman -S --noconfirm --needed efibootmgr
-        prompt "Installing GRUB for UEFI, this might take a while..." yellow
+        prompt "Installing GRUB for UEFI" progress
 
         # https://wiki.archlinux.org/index.php/GRUB#Installation_2
         # This currently installs it to $mountPoint/EFI/BOOT/BOOTX64.EFI (the default/fallback boot path) which might remove the Windows EFI executable there
         out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
     else
         # This hasn't been tested
-        prompt "Installing GRUB for BIOS, this might take a while..." yellow
+        prompt "Installing GRUB for BIOS" progress
         out grub-install --target=i386-pc "$fs"
     fi
     out grub-mkconfig -o /boot/grub/grub.cfg
@@ -88,7 +88,7 @@ grub_setup() {
 }
 # Sets up yay
 yay_setup() {
-    prompt "Installing yay..." yellow
+    prompt "Installing yay" progress
     userpath=/home/"$uName"/
     cd "$userpath" || exit
     out su -c "git clone https://aur.archlinux.org/yay.git" "$uName"
@@ -127,7 +127,7 @@ main() {
     fi
     [[ -n $debug ]] && mv "$variableLog" /home/"$uName"/
 
-    prompt "Log files have been dropped in $HOME!" green
+    prompt "Log files have been dropped in $HOME" green
 }
 
 main "$@"

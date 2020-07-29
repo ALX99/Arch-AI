@@ -58,19 +58,19 @@ system_check() {
     local gpus gpu
 
     [ $EUID -ne 0 ] &&
-        prompt "This script must be run as root" red &&
+        prompt "This script must be run as root" error &&
         exit 1
 
-    prompt "Updating the package database, please be patient..." yellow
+    prompt "Updating the package database, please be patient" progress
     out pacman -Sy
 
-    prompt "Checking for UEFI..." yellow
+    prompt "Checking for UEFI" progress
     if ls -A /sys/firmware/efi/efivars/ &>/dev/null; then
         uefi=true
-        prompt "Found UEFI!" green
+        prompt "Found UEFI" green
     fi
 
-    prompt "Identifying GPU drivers..." yellow
+    prompt "Identifying GPU drivers" progress
     gpus=$(lspci | grep -e VGA -e 3D | tr '[:upper:]' '[:lower:]')
     log_variable "gpus" "$gpus"
 
@@ -80,7 +80,7 @@ system_check() {
         case "$gpu" in
         # https://wiki.archlinux.org/index.php/Intel_graphics
         *"intel"*)
-            prompt "Intel GPU found!" green
+            prompt "Intel GPU found" green
             add_pkg mesa
             add_pkg vulkan-intel
             # HW acceleration
@@ -91,7 +91,7 @@ system_check() {
             ;;
             # https://wiki.archlinux.org/index.php/AMDGPU
         *"amd"*)
-            prompt "AMD GPU found!" green
+            prompt "AMD GPU found" green
             add_pkg mesa
             add_pkg vulkan-radeon
             # HW acceleration
@@ -102,7 +102,7 @@ system_check() {
             ;;
             # https://wiki.archlinux.org/index.php/NVIDIA
         *"nvidia"*)
-            prompt "Nvidia GPU found!" green
+            prompt "Nvidia GPU found" green
             add_pkg nvidia
             add_pkg nvidia-utils
             # HW acceleration
@@ -116,16 +116,16 @@ system_check() {
 # Installs missing requirements for this script (if any)
 # and updates the mirrorlist if needed
 installReqs() {
-    prompt "Upading package database..." yellow
+    prompt "Upading package database" progress
     out pacman -Sy
     if ! grep -q "Last Check" /etc/pacman.d/mirrorlist; then
-        prompt "Installing reflector..." yellow
+        prompt "Installing reflector" progress
         out pacman -S reflector --needed --noconfirm
-        prompt "Generating new pacman mirrors, please be patient..." yellow
+        prompt "Generating new pacman mirrors, please be patient" progress
         reflector --verbose --latest 150 --sort rate --save /etc/pacman.d/mirrorlist
     fi
 
-    prompt "Installing additional packages if required..." yellow
+    prompt "Installing additional packages if required" progress
     out pacman -S "${Reqs[@]}" --needed --noconfirm
 }
 
@@ -140,7 +140,7 @@ get_config() {
     log_variable "locale_list" "$locale_list"
 
     while [[ -z $locale ]]; do
-        prompt "Which locale would you like?" blue
+        prompt "Which locale would you like?" question
         locale=$(echo "$locale_list" | $Fzf_Preview)
     done
     while true; do
@@ -150,7 +150,7 @@ get_config() {
         iprompt "What username would you like:"
         uName="$Reply"
         [[ -n $uName && -n $hostname ]] && break
-        prompt "Username, hostname or the root password was left blank, try again." red
+        prompt "Username, hostname or the root password was left blank, try again" error
     done
 
     # Get user password
@@ -162,14 +162,14 @@ get_config() {
         pass2="$Reply"
         echo
         if [ -z "$pass1" ]; then
-            prompt "Password left blank, try again." red
+            prompt "Password left blank, try again" error
         elif [ "$pass1" == "$pass2" ]; then
             # userPass is written to info file
             # shellcheck disable=SC2034
             userPass="$pass1"
             break
         else
-            prompt "Passwords do not match, try again." red
+            prompt "Passwords do not match, try again" error
         fi
     done
 
@@ -182,14 +182,14 @@ get_config() {
         root2="$Reply"
         echo
         if [ -z "$root1" ]; then
-            prompt "Password left blank, try again." red
+            prompt "Password left blank, try again" error
         elif [ "$root1" == "$root2" ]; then
             # userPass is written to info file
             # shellcheck disable=SC2034
             rootPW="$root1"
             break
         else
-            prompt "Passwords do not match, try again." red
+            prompt "Passwords do not match, try again" error
         fi
     done
 }
@@ -198,17 +198,17 @@ get_micro() {
     local cpu
     ! Ynprompt "Would you like to install microcode updates for your CPU?" && return
 
-    prompt "Identifying the CPU drivers..." yellow
+    prompt "Identifying the CPU drivers" progress
     cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
     log_variable "cpu" "$cpu"
     case "$cpu" in
     *"intel"*)
-        prompt "Intel CPU found!" green
+        prompt "Intel CPU found" green
         add_pkg intel-ucode
         ;;
         # TODO, no clue AMD processors contains "AMD" in vendor_id
     *"amd"*)
-        prompt "AMD CPU found!" green
+        prompt "AMD CPU found" green
         add_pkg amd-ucode
         ;;
     esac
@@ -232,7 +232,7 @@ get_misc() {
 get_pkgs() {
     local choice choices
 
-    prompt "Would you like to install any additional common packages? (Use <Tab>)" blue
+    prompt "Would you like to install any additional common packages? (Use <Tab>)" question
     choices=$($Fzf_Preview -m <"$Common_Pkgs")
     for choice in $choices; do
         add_pkg "$(grep "$choice" "$Common_Pkgs" | cut -d' ' -f1)"
@@ -268,7 +268,7 @@ get_drive() {
     log_variable "fs" "$fs"
 
     if [[ -z $fs ]]; then
-        prompt "Something went wrong!" red
+        prompt "Something went wrong" error
         exit 1
     fi
 
@@ -283,7 +283,7 @@ get_drive() {
     done
 
     while ! [[ $HomeSize =~ $re ]]; do
-        prompt "Type 0 to fill the remaining space on the disk selected" yellow
+        prompt "Type 0 to fill the remaining space on the disk selected" note
         iprompt "Type out the size of the home partition [GB]:"
         HomeSize="$Reply"
     done
@@ -315,26 +315,26 @@ verify() {
     printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$uefi"
     printf "Packages: %s\n" "${Pacstrap[*]}"
     read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] &&
-        prompt "Installation cancelled!" red && exit
+        prompt "Installation cancelled" error && exit
     echo
 }
 
 # 1=bootloader, 2=swap, 3=root, 4=home
 format_fs() {
     while swapon --show | grep -q "$fs"; do
-        prompt "$fs seems to have swap partition, trying to disable it!" red
+        prompt "$fs seems to have swap partition, trying to disable it" error
         swapoff "$(swapon --show | grep "$fs" | awk '{ print $1}')"
     done
 
     while df | grep -q "$fs"; do
-        prompt "$fs seems to have some partion(s) mounted, trying to unmount!" red
+        prompt "$fs seems to have some partion(s) mounted, trying to unmount" error
         ls "$fs"?* | xargs -n1 umount -l
         sleep 1
     done
     # Wipe drive
     out wipefs -a "$fs"
 
-    prompt "Creating partitions..." yellow
+    prompt "Creating partitions" progress
     (
         # GPT > MBR
         echo g
@@ -372,18 +372,18 @@ format_fs() {
         echo w
     ) | out fdisk "$fs"
 
-    prompt "Formatting partitions..." yellow
+    prompt "Formatting partitions" progress
     out mkfs.fat -F32 "$bl"
     out mkswap -L SWAP_PARTITION "$swap"
     out swapon "$swap"
     out mkfs.ext4 -F "$root"
     out mkfs.ext4 -F "$home"
 
-    prompt "Setting partition labels..." yellow
+    prompt "Setting partition labels" progress
     out e2label "$root" ROOT_PARTITION
     out e2label "$home" HOME_PARTITION
 
-    prompt "Mounting $root and ${home}..." yellow
+    prompt "Mounting $root and ${home}" progress
     out mount "$root" /mnt
     out mkdir /mnt/home
     out mount "$home" /mnt/home
@@ -404,9 +404,9 @@ arch_install() {
     prompt "The script will now install and set up your system" green
     prompt "No further input will be needed" green
     sleep 2
-    prompt "Pacstrapping packages..." yellow
+    prompt "Pacstrapping packages" progress
     pacstrap /mnt "${Pacstrap[@]}"
-    prompt "Generating the fstab..." yellow
+    prompt "Generating the fstab" progress
     genfstab -U /mnt >/mnt/etc/fstab
 }
 
@@ -447,7 +447,7 @@ EOF
 # 1: message
 # 2: set to enable silent mode
 iprompt() {
-    prompt "$1 " blue true
+    prompt "$1 " question true
     if [[ -n $2 ]]; then
         read -rs Reply
     else
@@ -458,7 +458,7 @@ iprompt() {
 # Y/n prompt, returns 0 if ansewr is anything except n or N
 # 1: message
 Ynprompt() {
-    prompt "$1 (Y/n) " blue true
+    prompt "$1 (Y/n) " question true
     read -rn 1
     if [[ $REPLY =~ ^[Nn]$ ]]; then
         echo -e "\e[1Dn"
@@ -486,7 +486,7 @@ main() {
     format_fs
     arch_install
     jumpChroot
-    prompt "Arch Linux successfully installed!" green
+    prompt "Arch Linux successfully installed" green
 }
 
 main "$@"

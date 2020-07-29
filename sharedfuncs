@@ -4,20 +4,21 @@
 # shellcheck disable=SC2154
 # prompt
 # 1: message
-# 2: color (green, yellow, blue, red)
+# 2: messageType (green, progress, error, question, note, command)
 # 3: set to disable echoing of newline
 prompt() {
     case $2 in
-    green) color="\e[32m" ;;
-    yellow) color="\e[33m" ;;
-    red) color="\e[31m" ;;
-    blue) color="\e[34m" ;;
-    magenta) color="\e[95m" ;;
+    green) color="\e[32m" && m="$1!" ;;
+    progress) color="\e[33m" && m="$1..." ;;
+    error) color="\e[31m" && m="$1!" ;;
+    question) color="\e[34m" && m="$1" ;;
+    note) color="\e[36m" && m="[$1]";;
+    command) color="\e[95m" && m="Executing: $1" ;;
     esac
     if [[ -n $3 ]]; then
-        echo -en "$color $1\e[0m"
+        echo -en "$color $m\e[0m"
     else
-        echo -e "$color $1\e[0m"
+        echo -e "$color $m\e[0m"
     fi
 }
 
@@ -30,7 +31,7 @@ out() {
             "$@"
         } >>"$logFile" 2>&1
     else
-        [[ -n $show ]] && prompt "Running: $*" magenta
+        [[ -n $show ]] && prompt "$*" command
         "$@" 1>"$tmpOut" 2>"$tmpErr"
 
         # Log errors
