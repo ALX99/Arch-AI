@@ -2,7 +2,6 @@
 # Sets up the system without any user interaction.
 # All the variables that is needed will be sourced from /info
 # shellcheck disable=SC2154
-# TODO use readlink
 
 user_setup() {
     prompt "Setting up the user $uName..." yellow
@@ -10,7 +9,7 @@ user_setup() {
     sed -i "/%wheel ALL=(ALL) ALL/s/^#//g" /etc/sudoers
     out echo "$uName:$userPass" | chpasswd
 
-    prompt "Setting the root password..." yellow
+    prompt "Setting up the root password..." yellow
     out echo "root:$rootPW" | chpasswd
 }
 
@@ -109,16 +108,16 @@ main() {
     # Shred file since it contains sensative info
     out shred -n25 --remove /info
 
-    prompt "Running in chrooted mode!" green
     user_setup
     system_setup
     # This modifies the grub config, so we'll run this before configuring grub
     [[ -n $enableHibernation ]] && hibernation_setup
     grub_setup
+    # Doing this before installaing yay might make the installation faster
+    [[ -n $makepkgParallel ]] && makepkg_parallel
     yay_setup
 
     [[ -n $enableSSDTRIM ]] && trim_setup
-    [[ -n $makepkgParallel ]] && makepkg_parallel
 
     # Move files to $HOME
     if [[ -n $logging ]]; then
@@ -128,8 +127,7 @@ main() {
     fi
     [[ -n $debug ]] && mv "$variableLog" /home/"$uName"/
 
-    prompt "Briefly check out the log files to make sure that something hasn't gone terribly wrong!" yellow
-    ls Arch-AI*
+    prompt "Log files have been dropped in $HOME!" green
 }
 
 main "$@"

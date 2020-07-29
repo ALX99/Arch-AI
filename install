@@ -475,7 +475,6 @@ main() {
     # Remove files from previous runs
     rm -f "$errorfile" "$logFile" "$variableLog" "$tmpOut" "$tmpErr"
     read_arguments "$@"
-    prompt "Running in non chrooted mode!" green
     system_check
     installReqs
     get_config
