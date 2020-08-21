@@ -23,7 +23,7 @@ usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 Flags:
     -h, --help    show this help text
     -d, --debug   enable debugging mode (enables -l)
-    -l, --logging enable logging (disables -s and -v) 
+    -l, --logging enable logging (disables -v) 
     -s, --show    enable showing which commands are run 
     -v, --verbose enable output (enables -s)"
 
