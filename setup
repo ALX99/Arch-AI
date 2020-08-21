@@ -35,8 +35,8 @@ system_setup() {
     # TODO double locale problem
     prompt "Setting up the locale: $locale" work
     sed -i "/$locale/s/^#//g" /etc/locale.gen
-    out localectl set-locale LANG="$locale"
     out locale-gen
+    echo -e "LANG=$locale\nLANGUAGE=$locale\nLC_ALL=$locale" > /etc/locale.conf
     work_done
 
     prompt "Setting up the hostname: $hostname" work
@@ -135,8 +135,8 @@ main() {
     grub_setup
     # Doing this before installaing yay might make the installation faster
     [[ -n $makepkgParallel ]] && makepkg_parallel
-    yay_setup
 
+    [[ -n $installYAY ]] && yay_setup
     [[ -n $enableSSDTRIM ]] && trim_setup
 
     # Move files to $HOME
