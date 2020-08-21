@@ -22,8 +22,8 @@ usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 
 Flags:
     -h, --help    show this help text
-    -d, --debug   enable debugging mode (enables -l)
-    -l, --logging enable logging (disables -s and -v) 
+    -d, --debug   enable debugging mode (enables -l, -s)
+    -l, --logging enable logging (disables -v) 
     -s, --show    enable showing which commands are run 
     -v, --verbose enable output (enables -s)"
 
@@ -43,6 +43,11 @@ read_arguments() {
         -d | --debug)
             logging=true
             debug=true
+            show=true
+            ;;
+        -h | --help)
+            echo "$usage"
+            exit 0
             ;;
         *)
             echo "Error: Unsupported flag $1" >&2
@@ -315,7 +320,7 @@ get_drive() {
 }
 
 verify() {
-    printf "Username: %s\nLocale: %s\nHostname: %s\n\n" "$uName" "$locale" "$hostname"
+    printf "Username: %s\nHostname: %s\nLocale: %s\n\n" "$uName" "$hostname" "$locale"
     printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$uefi"
     printf "Packages: %s\n" "${Pacstrap[*]}"
     read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] &&
