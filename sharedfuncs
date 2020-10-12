@@ -48,10 +48,10 @@ out() {
     if [[ -n $logging ]]; then
         {
             echo "COMMAND: $*"
-            "$@"
+            "$*"
         } >>"$logFile" 2>&1
     else
-        "$@" 1>"$tmpOut" 2>"$tmpErr"
+        "$*" 1>"$tmpOut" 2>"$tmpErr"
 
         # Log errors
         if [[ -s $tmpErr ]]; then

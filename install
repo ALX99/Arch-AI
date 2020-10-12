@@ -141,6 +141,7 @@ installReqs() {
 get_config() {
     local locale_list pass1 pass2 root1 root2
 
+    # TODO fix how this is parsed
     locale_list="$(grep UTF-8 /etc/locale.gen | awk '{print $1}' | cut -c 2-)"
     # TODO, the US.UTF-8 option is uncommented in the Arch Linux
     # live ISO, so for now I'll add it as an option manually
@@ -409,8 +410,6 @@ mkpart() {
     echo
     echo
     echo "$1"
-    # Partition x contain signature message
-    echo "y"
 }
 
 arch_install() {

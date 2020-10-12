@@ -79,8 +79,8 @@ makepkg_parallel() {
 
 grub_setup() {
     local mountPoint
-    [[ -n $uefi ]] && mountPoint="/efi/" || mountPoint="/boot/"
-    out mkdir "$mountPoint"
+    [[ -n $uefi ]] && mountPoint="/boot/EFI" || mountPoint="/boot"
+    out mkdir -p "$mountPoint"
     out mount "$bl" "$mountPoint"
     if [[ -n $uefi ]]; then
         prompt "Downloading additional dependencies for GRUB with UEFI" work
@@ -126,13 +126,14 @@ main() {
     source /info
     source /sharedfuncs
     # Shred file since it contains sensative info
-    out shred -n25 --remove /info
+    out shred -n25 -u /info
 
     user_setup
     system_setup
     # This modifies the grub config, so we'll run this before configuring grub
     [[ -n $enableHibernation ]] && hibernation_setup
     grub_setup
+
     # Doing this before installaing yay might make the installation faster
     [[ -n $makepkgParallel ]] && makepkg_parallel
 
