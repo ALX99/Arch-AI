@@ -144,7 +144,7 @@ get_config() {
     locale_list+=$(printf "\nen.US.UTF-8")
     log_variable "locale_list"
 
-    while [[ -z $locale ]]; do
+    while [[ -z ${locale:-} ]]; do
         prompt "Which locale would you like?" question
         locale=$(echo "$locale_list" | $Fzf_Preview)
     done
@@ -269,7 +269,7 @@ get_drive() {
     log_variable "numDrives"
 
     echo "$drives" | awk '{print NR,$0}'
-    while ! [[ $choice =~ $re ]] || [[ $choice -le 0 || $choice -gt $numDrives ]]; do
+    while ! [[ ${choice:-} =~ $re ]] || [[ ${choice:-} -le 0 || ${choice:-} -gt $numDrives ]]; do
         iprompt "Which drive would you like to install Arch on [1-$numDrives]: "
         choice="$Reply"
     done
@@ -284,17 +284,17 @@ get_drive() {
         exit 1
     fi
 
-    while ! [[ $RootSize =~ $re ]]; do
+    while ! [[ ${RootSize:-} =~ $re ]]; do
         iprompt "How big should the root partition be [GB]:"
         RootSize="$Reply"
     done
 
-    while ! [[ $SwapSize =~ $re ]]; do
+    while ! [[ ${SwapSize:-} =~ $re ]]; do
         iprompt "How big should the swap partition be [GB]:"
         SwapSize="$Reply"
     done
 
-    while ! [[ $HomeSize =~ $re ]]; do
+    while ! [[ ${HomeSize:-} =~ $re ]]; do
         prompt "Type 0 to fill the remaining space on the disk selected" note
         iprompt "Type out the size of the home partition [GB]:"
         HomeSize="$Reply"
@@ -459,7 +459,7 @@ EOF
 # 2: set to enable silent mode
 iprompt() {
     prompt "$1 " question true
-    if [[ -n $2 ]]; then
+    if [[ -n ${2:-} ]]; then
         read -rs Reply
     else
         read -r Reply
@@ -481,7 +481,7 @@ Ynprompt() {
 }
 
 main() {
-    set -e
+    set -euxo pipefail
     source sharedfuncs
     # Remove files from previous runs
     rm -f "$errorfile" "$logFile" "$variableLog" "$tmpOut" "$tmpErr"
