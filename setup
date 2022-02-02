@@ -35,12 +35,12 @@ system_setup() {
     prompt "Setting up the locale: $locale" work
     out sed -i "/$locale/s/^#//g" /etc/locale.gen
     out locale-gen
-    out echo -e "LANG=$locale\nLANGUAGE=$locale\nLC_ALL=$locale" \>/etc/locale.conf
+    echo -e "LANG=$locale\nLANGUAGE=$locale\nLC_ALL=$locale" >/etc/locale.conf
 
     # Setup hostname
     prompt "Setting up the hostname: $hostname" work
-    out echo "$hostname" \>/etc/hostname
-    out printf "127.0.0.1\tlocalhost\n::1\tlocalhost\n127.0.1.1	%s.localdomain	%s" "$hostname" "$hostname" \>/etc/hosts
+    echo "$hostname" >/etc/hostname
+    printf "127.0.0.1\tlocalhost\n::1\tlocalhost\n127.0.1.1	%s.localdomain	%s" "$hostname" "$hostname" >/etc/hosts
 }
 
 trim_setup() {
@@ -101,7 +101,7 @@ yay_setup() {
     userpath=/home/"$uName"/
     out cd "$userpath" \|\| exit
     out su -c \"git clone https://aur.archlinux.org/yay.git\" "$uName"
-    out 'cd yay || exit'
+    out cd yay \|\| exit
     out su -c \"makepkg -s\" "$uName"
     out pacman -U --needed --noconfirm -- *.xz
     cd ..
