@@ -1,6 +1,8 @@
 #!/bin/bash
 # NOTE: Lowercase variables will be exported to a file
 
+set -euo pipefail
+
 # The below files will be forcefully removed when starting this script.
 errorfile="Arch-AI_errors.log"
 logFile="Arch-AI.log"
@@ -403,12 +405,12 @@ format_fs() {
 }
 
 # sequence for creating a new partition
-# 1: size of partition
+# 1: size of partition (leave empty to fill)
 mkpart() {
     echo n
     echo
     echo
-    echo "$1"
+    echo "${1:-}"
 }
 
 arch_install() {
@@ -481,7 +483,6 @@ Ynprompt() {
 }
 
 main() {
-    set -euxo pipefail
     source sharedfuncs
     # Remove files from previous runs
     rm -f "$errorfile" "$logFile" "$variableLog" "$tmpOut" "$tmpErr"

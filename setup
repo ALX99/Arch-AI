@@ -3,6 +3,8 @@
 # All the variables that is needed will be sourced from /info
 # shellcheck disable=SC2154
 
+set -euo pipefail
+
 user_setup() {
     prompt "Setting up the user $uName" work
     out useradd -m -G wheel "$uName"
@@ -63,12 +65,20 @@ hibernation_setup() {
 # https://wiki.archlinux.org/index.php/Makepkg#Parallel_compilation
 makepkg_parallel() {
     prompt "Enabling parallel compilation and compression" work
-    sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf
-    sed -i '/COMPRESSXZ/c\COMPRESSXZ=(xz -c -z - --threads=0)' /etc/makepkg.conf
-    sed -i '/COMPRESSZST/c\COMPRESSZST=(zstd -c -z -q --threads=0 -)' /etc/makepkg.conf
+    sed -i '/#BUILDDIR=/c\BUILDDIR=\/tmp\/makepkg/' /etc/makepkg.conf # build in memory
+    sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf # build with all cores
+
+    sed -i 's/COMPRESSXZ=(xz/COMPRESSXZ=(xz --threads=0/' /etc/makepkg.conf # compress with all threads
+    sed -i 's/COMPRESSZST=(zstd/COMPRESSZST=(zstd --threads=0/' /etc/makepkg.conf # compress with all threads
 
     prompt "Enabling safe architecture-specific optimizations" work
-    sed -i '/CFLAGS="-m/c\CFLAGS="-march=native -O2 -pipe -fno-plt"' /etc/makepkg.conf
+    sed -i 's/#RUSTFLAGS="/RUSTFLAGS="-C target-cpu=native /' /etc/makepkg.conf # enable safe rust optimizations
+
+    marchFlag="$(grep -o "\-march\S*" /etc/makepkg.conf)"
+    mtuneFlag="$(grep -o "\-mtune\S*" /etc/makepkg.conf)"
+    [[ -n ${marchFlag:-} ]] && sed -i "s/$marchFlag//" /etc/makepkg.conf
+    [[ -n ${mtuneFlag:-} ]] && sed -i "s/$mtuneFlag//" /etc/makepkg.conf
+    sed -i 's/CFLAGS="/CFLAGS="-march=native /' /etc/makepkg.conf # enable safe gcc optimizations
 }
 
 grub_setup() {
@@ -98,12 +108,11 @@ grub_setup() {
 # Sets up yay
 yay_setup() {
     prompt "Installing yay" work
-    userpath=/home/"$uName"/
-    out cd "$userpath" \|\| exit
+    out cd /home/"$uName"/
     out su -c \"git clone https://aur.archlinux.org/yay.git\" "$uName"
-    out cd yay \|\| exit
+    out cd yay
     out su -c \"makepkg -s\" "$uName"
-    out pacman -U --needed --noconfirm -- *.xz
+    out pacman -U --needed --noconfirm -- *.zst
     cd ..
     rm -rf yay/
     cd /
