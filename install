@@ -245,8 +245,8 @@ get_misc() {
 get_pkgs() {
     local choice choices
 
-    prompt "Would you like to install any additional common packages? (Use <Tab>)" question
-    choices=$(pacman -Slq | fzf -m --preview 'pacman -Si {1}')
+    prompt "Would you like to install any additional packages? (Use <Tab>)" question
+    choices=$(pacman -Slq | fzf -m --preview 'pacman -Si {1}' || true)
     for choice in $choices; do
         add_pkg "$choice"
     done
@@ -436,14 +436,14 @@ jumpChroot() {
     chmod 554 /mnt/setup
 
     # Move files to the new arch installation
-    if [[ -n $logging ]]; then
+    if [[ -n ${logging:-} ]]; then
         mv "$logFile" /mnt/
         logFile="/$logFile"
     else
         mv "$errorfile" /mnt/
         errorfile="/$errorfile"
     fi
-    if [[ -n $debug ]]; then
+    if [[ -n ${debug:-} ]]; then
         mv "$variableLog" /mnt/
         variableLog="/$variableLog"
         #less </mnt/info
