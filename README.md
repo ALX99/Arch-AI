@@ -31,7 +31,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - GPU detection + installation
 - GRUB installation
 - yay installation
-- Option to install additional common packages
+- Option to install packages
 - Option to auto-trim mounted SSDs once a week
 - Option to configure parallel and optimized compilation&compression for makepkg
 - Locale configuration and generation
