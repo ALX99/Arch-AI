@@ -1,7 +1,12 @@
-if [ -z "$dev" ]; then
-echo "Downloading from the master branch"
-curl -O https://raw.githubusercontent.com/alx99/arch-ai/master/sharedfuncs;curl -O https://raw.githubusercontent.com/alx99/arch-ai/master/common_pkgs;curl -O https://raw.githubusercontent.com/alx99/arch-ai/master/setup;curl -O https://raw.githubusercontent.com/alx99/arch-ai/master/install;chmod +x install
-else
-echo "Downloading from the develop branch"
-curl -O https://raw.githubusercontent.com/ALX99/arch-ai/develop/sharedfuncs;curl -O https://raw.githubusercontent.com/alx99/arch-ai/develop/common_pkgs;curl -O https://raw.githubusercontent.com/alx99/arch-ai/develop/setup;curl -O https://raw.githubusercontent.com/alx99/arch-ai/develop/install;chmod +x install
-fi
+#!/bin/bash
+branch="master"
+[ -n "$dev" ] && branch="develop"
+echo "Downloading from the $branch branch"
+
+curl -O https://raw.githubusercontent.com/alx99/arch-ai/"$branch"/sharedfuncs
+curl -O https://raw.githubusercontent.com/alx99/arch-ai/"$branch"/common_pkgs
+curl -O https://raw.githubusercontent.com/alx99/arch-ai/"$branch"/setup
+curl -O https://raw.githubusercontent.com/alx99/arch-ai/"$branch"/install
+
+chmod +x install
+if [ $EUID -ne 0 ]; then sudo ./install else ./install; fi

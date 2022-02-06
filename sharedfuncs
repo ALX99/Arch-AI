@@ -35,10 +35,10 @@ prompt() {
 # shellcheck disable=SC2154
 # out handles running commands and redirecting the output
 out() {
-    [[ -n $show ]] && prompt "$*" command
+    [[ -n ${show:-} ]] && prompt "$*" command
     # If logging is enable we'll log
     # the full output of the command
-    if [[ -n $logging ]]; then
+    if [[ -n ${logging:-} ]]; then
         echo "COMMAND: $*" >>"$logFile"
         if [[ -n ${verbose:-} ]]; then
             eval "$*" 2>&1 | tee -a "$logFile"
@@ -58,7 +58,7 @@ out() {
 # log_variable logs the contents of a variable to the variableLog if the debug flag is set
 # 1: name of variable
 log_variable() {
-    if [[ -n $debug ]]; then
+    if [[ -n ${debug:-} ]]; then
         printf "======= %s =======\n%s\n" "$1" "${!1}" >>"$variableLog"
     fi
 }
