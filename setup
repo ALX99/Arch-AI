@@ -141,8 +141,6 @@ main() {
     # Move files to $HOME
     if [[ -n $logging ]]; then
         mv "$logFile" /home/"$uName"/
-    else
-        mv "$errorfile" /home/"$uName"/
     fi
     [[ -n $debug ]] && mv "$variableLog" /home/"$uName"/
 

@@ -4,7 +4,6 @@
 set -euo pipefail
 
 # The below files will be forcefully removed when starting this script.
-errorfile="Arch-AI_errors.log"
 logFile="Arch-AI.log"
 variableLog="Arch-AI_variables.log"
 tmpOut="/tmp/out"
@@ -439,9 +438,6 @@ jumpChroot() {
     if [[ -n ${logging:-} ]]; then
         mv "$logFile" /mnt/
         logFile="/$logFile"
-    else
-        mv "$errorfile" /mnt/
-        errorfile="/$errorfile"
     fi
     if [[ -n ${debug:-} ]]; then
         mv "$variableLog" /mnt/
@@ -467,7 +463,7 @@ iprompt() {
     fi
 }
 
-# Y/n prompt, returns 0 if ansewr is anything except n or N
+# Y/n prompt, returns 0 if answer is anything except n or N
 # 1: message
 Ynprompt() {
     prompt "$1 (Y/n) " question true
@@ -484,7 +480,7 @@ Ynprompt() {
 main() {
     source sharedfuncs
     # Remove files from previous runs
-    rm -f "$errorfile" "$logFile" "$variableLog" "$tmpOut" "$tmpErr"
+    rm -f "$logFile" "$variableLog" "$tmpOut" "$tmpErr"
     read_arguments "$@"
     system_check
     installReqs
