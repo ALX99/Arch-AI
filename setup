@@ -9,10 +9,10 @@ user_setup() {
     prompt "Setting up the user $uName" work
     out useradd -m -G wheel "$uName"
     sed -i "/%wheel ALL=(ALL:ALL) ALL/s/^#//g" /etc/sudoers
-    out echo "$uName:$userPass" \| chpasswd
+    echo "$uName:$userPass" \| chpasswd
 
     prompt "Setting up the root password" work
-    out echo "root:$rootPW" \| chpasswd
+    echo "root:$rootPW" \| chpasswd
 }
 
 system_setup() {
@@ -28,10 +28,9 @@ system_setup() {
     log_variable "timeZ"
     out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
     out timedatectl set-timezone "$timeZ"
-    # Enable Network Time Protocol (NTP) synchronization
-    out timedatectl set-ntp true
-    # Write the current software clock time to the hardware clock
-    out hwclock --systohc
+
+    out timedatectl set-ntp true # Enable Network Time Protocol (NTP) synchronization
+    out hwclock --systohc # Write the current software clock time to the hardware clock
 
     # TODO double locale problem
     prompt "Setting up the locale: $locale" work

@@ -23,9 +23,9 @@ usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 Flags:
     -h, --help    show this help text
     -d, --debug   enable debugging mode (enables -l, -s) and logs variables to $variableLog
-    -l, --logging enable logging of all commands (disables -v)
+    -l, --logging enable logging of all commands
     -s, --show    enable showing which commands are run
-    -v, --verbose enable output (enables -s)"
+    -v, --verbose enable showing the output of the commands (also enables -s)"
 
 read_arguments() {
     while (("$#")); do
@@ -162,44 +162,16 @@ get_config() {
     log_variable "uName"
 
     # Get user password
-    while true; do
-        iprompt "What password would you like for ${uName}:" silent
-        pass1="$Reply"
-        echo
-        iprompt "Confirm password for $uName:" silent
-        pass2="$Reply"
-        echo
-        if [ -z "$pass1" ]; then
-            prompt "Password left blank, try again" error
-        elif [ "$pass1" == "$pass2" ]; then
-            # userPass is written to info file
-            # shellcheck disable=SC2034
-            userPass="$pass1"
-            break
-        else
-            prompt "Passwords do not match, try again" error
-        fi
-    done
+    iprompt "What password would you like for ${uName}:" silent
+    # shellcheck disable=SC2034
+    userPass="$Reply"
+    echo
 
     # Get root password
-    while true; do
-        iprompt "What password would you like for the root user:" silent
-        root1="$Reply"
-        echo
-        iprompt "Confirm password for the root user:" silent
-        root2="$Reply"
-        echo
-        if [ -z "$root1" ]; then
-            prompt "Password left blank, try again" error
-        elif [ "$root1" == "$root2" ]; then
-            # userPass is written to info file
-            # shellcheck disable=SC2034
-            rootPW="$root1"
-            break
-        else
-            prompt "Passwords do not match, try again" error
-        fi
-    done
+    iprompt "What password would you like for the root user:" silent
+    # shellcheck disable=SC2034
+    rootPW="$Reply"
+    echo
 }
 
 # Asks the user if they want microcode updates
@@ -345,7 +317,7 @@ format_fs() {
         sleep 1
     done
     # Wipe drive
-    out wipefs -a "$fs"
+    out wipefs -af "$fs"
 
     prompt "Creating partitions" work
     (
