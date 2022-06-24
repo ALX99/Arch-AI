@@ -368,6 +368,10 @@ format_fs() {
     out e2label "$root" ROOT_PARTITION
     out e2label "$home" HOME_PARTITION
 
+    prompt "Enabling fast_commit on ext4 filesystems" work
+    out tune2fs -O fast_commit "$root"
+    out tune2fs -O fast_commit "$home"
+
     prompt "Mounting $root and ${home}" work
     out mount "$root" /mnt
     out mkdir /mnt/home

@@ -27,6 +27,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - Automatic drive formatting
 - User account & hostname & sudo setup
 - Timezone + clock setup
+- Ext4 fast_commit enabled
 - CPU detection + microcode installation
 - GPU detection + installation
 - GRUB installation
