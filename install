@@ -131,8 +131,6 @@ installReqs() {
 
 # Get username, hostname, password, locale
 get_config() {
-  local locale_list pass1 pass2 root1 root2
-
   # TODO fix how this is parsed
   locale_list="$(grep UTF-8 /etc/locale.gen | awk '{print $1}' | cut -c 2-)"
   log_variable "locale_list"
@@ -176,7 +174,7 @@ get_micro() {
   ! Ynprompt "Would you like to install microcode updates for your CPU?" && return
 
   prompt "Identifying the CPU drivers" work
-  cpu=$(cat /proc/cpuinfo | grep vendor | tr '[:upper:]' '[:lower:]')
+  cpu=$(grep vendor /proc/cpuinfo | tr '[:upper:]' '[:lower:]')
   log_variable "cpu"
   case "$cpu" in
   *"intel"*)
@@ -207,11 +205,8 @@ get_misc() {
 
 # Ask for some additional popular packages
 get_pkgs() {
-  local choice choices
-
   prompt "Would you like to install any additional packages? (Use <Tab>)" question
-  choices=$(pacman -Slq | fzf -m --preview 'pacman -Si {1}' || true)
-  for choice in $choices; do
+  for choice in $(pacman -Slq | fzf -m --preview 'pacman -Si {1}' || true); do
     add_pkg "$choice"
   done
 }
