@@ -72,6 +72,9 @@ system_check() {
 	if ls /sys/firmware/efi/efivars/ &>/dev/null; then
 		uefi=true
 		prompt "Found UEFI" green
+	else
+		uefi=false
+		prompt "Did not find UEFI" green
 	fi
 
 	prompt "Identifying GPU drivers" work
@@ -139,9 +142,6 @@ get_config() {
 
 	# TODO fix how this is parsed
 	locale_list="$(grep UTF-8 /etc/locale.gen | awk '{print $1}' | cut -c 2-)"
-	# TODO, the US.UTF-8 option is uncommented in the Arch Linux
-	# live ISO, so for now I'll add it as an option manually
-	locale_list+=$(printf "\nen.US.UTF-8")
 	log_variable "locale_list"
 
 	while [[ -z ${locale:-} ]]; do
@@ -226,7 +226,9 @@ get_pkgs() {
 # Adds a package to be pacstrapped
 add_pkg() {
 	# Add package to list if not already there
-	[[ ${Pacstrap[*]} != *$1* ]] && Pacstrap+=("$1")
+	if [[ ${Pacstrap[*]} != *$1* ]]; then
+		Pacstrap+=("$1")
+	fi
 }
 
 # Asks which drive arch should be installed to
@@ -324,7 +326,7 @@ format_fs() {
 		# GPT > MBR
 		echo g
 
-		if [[ -n $uefi ]]; then
+		if $uefi; then
 			mkpart "+512M"
 			# Set partition type to 'EFI System'
 			echo t

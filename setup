@@ -82,10 +82,10 @@ makepkg_parallel() {
 
 grub_setup() {
 	local mountPoint
-	[[ -n $uefi ]] && mountPoint="/boot/EFI" || mountPoint="/boot"
+	$uefi && mountPoint="/boot/EFI" || mountPoint="/boot"
 	out mkdir -p "$mountPoint"
 	out mount "$bl" "$mountPoint"
-	if [[ -n $uefi ]]; then
+	if $uefi; then
 		prompt "Downloading additional dependencies for GRUB with UEFI" work
 		out pacman -S --noconfirm --needed efibootmgr
 
