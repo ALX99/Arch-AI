@@ -27,7 +27,6 @@ system_setup() {
 	timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
 	log_variable "timeZ"
 	out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
-	out timedatectl set-timezone "$timeZ"
 
 	out timedatectl set-ntp true # Enable Network Time Protocol (NTP) synchronization
 	out hwclock --systohc        # Write the current software clock time to the hardware clock
