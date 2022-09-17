@@ -299,6 +299,10 @@ verify() {
   echo
 }
 
+set_ntp() {
+  out timedatectl set-ntp true # Enable Network Time Protocol (NTP) synchronization
+}
+
 # 1=bootloader, 2=swap, 3=root, 4=home
 format_fs() {
   while swapon --show | grep -q "$fs"; do
@@ -458,6 +462,7 @@ main() {
   get_pkgs
   get_drive
   verify
+  set_ntp
   format_fs
   arch_install
   jumpChroot

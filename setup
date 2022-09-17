@@ -28,8 +28,7 @@ system_setup() {
   log_variable "timeZ"
   out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
 
-  out timedatectl set-ntp true # Enable Network Time Protocol (NTP) synchronization
-  out hwclock --systohc        # Write the current software clock time to the hardware clock
+  out hwclock --systohc # Write the current software clock time to the hardware clock
 
   # TODO double locale problem
   prompt "Setting up the locale: $locale" work
