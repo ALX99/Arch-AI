@@ -24,7 +24,7 @@ system_setup() {
 
   # Set up the timezone and clock
   prompt "Setting up the timezone" work
-  timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
+  timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | awk '/timezone/{print $2}')"
   log_variable "timeZ"
   out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
 
