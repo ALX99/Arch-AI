@@ -6,8 +6,6 @@ set -xeuo pipefail
 # The below files will be forcefully removed when starting this script.
 logFile="Arch-AI.log"
 variableLog="Arch-AI_variables.log"
-tmpOut="/tmp/out"
-tmpErr="/tmp/err"
 
 # Packages that will be installed on the system with pacstrap
 # the only things you are allowed to remove here would be git
@@ -450,7 +448,7 @@ Ynprompt() {
 main() {
   source sharedfuncs
   # Remove files from previous runs
-  rm -f "$logFile" "$variableLog" "$tmpOut" "$tmpErr"
+  rm -f "$logFile" "$variableLog"
   read_arguments "$@"
   system_check
   installReqs
