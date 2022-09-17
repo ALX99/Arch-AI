@@ -6,141 +6,141 @@
 set -euo pipefail
 
 user_setup() {
-	prompt "Setting up the user $uName" work
-	out useradd -m -G wheel "$uName"
-	sed -i "/%wheel ALL=(ALL:ALL) ALL/s/^#//g" /etc/sudoers
-	echo "$uName:$userPass" \| chpasswd
+  prompt "Setting up the user $uName" work
+  out useradd -m -G wheel "$uName"
+  sed -i "/%wheel ALL=(ALL:ALL) ALL/s/^#//g" /etc/sudoers
+  echo "$uName:$userPass" \| chpasswd
 
-	prompt "Setting up the root password" work
-	echo "root:$rootPW" \| chpasswd
+  prompt "Setting up the root password" work
+  echo "root:$rootPW" \| chpasswd
 }
 
 system_setup() {
-	local timeZ
-	prompt "Setting up the system" work
-	out systemctl enable NetworkManager
-	# https://wiki.archlinux.org/title/systemd-timesyncd
-	out systemctl enable systemd-timesyncd
+  local timeZ
+  prompt "Setting up the system" work
+  out systemctl enable NetworkManager
+  # https://wiki.archlinux.org/title/systemd-timesyncd
+  out systemctl enable systemd-timesyncd
 
-	# Set up the timezone and clock
-	prompt "Setting up the timezone" work
-	timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
-	log_variable "timeZ"
-	out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
+  # Set up the timezone and clock
+  prompt "Setting up the timezone" work
+  timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | grep timezone | awk '{print $2}')"
+  log_variable "timeZ"
+  out ln -sf /usr/share/zoneinfo/"$timeZ" /etc/localtime
 
-	out timedatectl set-ntp true # Enable Network Time Protocol (NTP) synchronization
-	out hwclock --systohc        # Write the current software clock time to the hardware clock
+  out timedatectl set-ntp true # Enable Network Time Protocol (NTP) synchronization
+  out hwclock --systohc        # Write the current software clock time to the hardware clock
 
-	# TODO double locale problem
-	prompt "Setting up the locale: $locale" work
-	out sed -i "/$locale/s/^#//g" /etc/locale.gen
-	out locale-gen
-	echo -e "LANG=$locale\nLANGUAGE=$locale\nLC_ALL=$locale" >/etc/locale.conf
+  # TODO double locale problem
+  prompt "Setting up the locale: $locale" work
+  out sed -i "/$locale/s/^#//g" /etc/locale.gen
+  out locale-gen
+  echo -e "LANG=$locale\nLANGUAGE=$locale\nLC_ALL=$locale" >/etc/locale.conf
 
-	# Setup hostname
-	prompt "Setting up the hostname: $hostname" work
-	echo "$hostname" >/etc/hostname
-	printf "127.0.0.1\tlocalhost\n::1\tlocalhost\n127.0.1.1	%s.localdomain	%s" "$hostname" "$hostname" >/etc/hosts
+  # Setup hostname
+  prompt "Setting up the hostname: $hostname" work
+  echo "$hostname" >/etc/hostname
+  printf "127.0.0.1\tlocalhost\n::1\tlocalhost\n127.0.1.1	%s.localdomain	%s" "$hostname" "$hostname" >/etc/hosts
 }
 
 trim_setup() {
-	prompt "Enabling auto-trimming of SSDs" work
-	out systemctl enable fstrim.timer
+  prompt "Enabling auto-trimming of SSDs" work
+  out systemctl enable fstrim.timer
 }
 
 hibernation_setup() {
-	prompt "Modifying kernel parameters to allow for hibernation" work
-	swapUUID=$(blkid -s UUID -o value "$swap")
-	log_variable "swapUUID"
-	# Modify kernel parameters and initramfs hooks
-	sed -i "/GRUB_CMDLINE_LINUX=/c\GRUB_CMDLINE_LINUX=\"resume=UUID=$swapUUID\"" /etc/default/grub &&
-		sed -i "s/\<keyboard\>/& resume/" /etc/mkinitcpio.conf # Add the resume hook after the keyboard hook
+  prompt "Modifying kernel parameters to allow for hibernation" work
+  swapUUID=$(blkid -s UUID -o value "$swap")
+  log_variable "swapUUID"
+  # Modify kernel parameters and initramfs hooks
+  sed -i "/GRUB_CMDLINE_LINUX=/c\GRUB_CMDLINE_LINUX=\"resume=UUID=$swapUUID\"" /etc/default/grub &&
+    sed -i "s/\<keyboard\>/& resume/" /etc/mkinitcpio.conf # Add the resume hook after the keyboard hook
 
-	prompt "Regenerating the initramfs" work
-	out mkinitcpio -p linux
+  prompt "Regenerating the initramfs" work
+  out mkinitcpio -p linux
 }
 
 # https://wiki.archlinux.org/index.php/Makepkg#Parallel_compilation
 makepkg_parallel() {
-	prompt "Enabling parallel compilation and compression" work
-	sed -i '/#BUILDDIR=/c\BUILDDIR=\/tmp\/makepkg/' /etc/makepkg.conf # build in memory
-	sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf   # build with all cores
+  prompt "Enabling parallel compilation and compression" work
+  sed -i '/#BUILDDIR=/c\BUILDDIR=\/tmp\/makepkg/' /etc/makepkg.conf # build in memory
+  sed -i '/MAKEFLAGS=/c\MAKEFLAGS="-j$(nproc)"' /etc/makepkg.conf   # build with all cores
 
-	sed -i 's/COMPRESSXZ=(xz/COMPRESSXZ=(xz --threads=0/' /etc/makepkg.conf       # compress with all threads
-	sed -i 's/COMPRESSZST=(zstd/COMPRESSZST=(zstd --threads=0/' /etc/makepkg.conf # compress with all threads
+  sed -i 's/COMPRESSXZ=(xz/COMPRESSXZ=(xz --threads=0/' /etc/makepkg.conf       # compress with all threads
+  sed -i 's/COMPRESSZST=(zstd/COMPRESSZST=(zstd --threads=0/' /etc/makepkg.conf # compress with all threads
 
-	prompt "Enabling safe architecture-specific optimizations" work
-	sed -i 's/#RUSTFLAGS="/RUSTFLAGS="-C target-cpu=native /' /etc/makepkg.conf # enable safe rust optimizations
+  prompt "Enabling safe architecture-specific optimizations" work
+  sed -i 's/#RUSTFLAGS="/RUSTFLAGS="-C target-cpu=native /' /etc/makepkg.conf # enable safe rust optimizations
 
-	marchFlag="$(grep -o "\-march\S*" /etc/makepkg.conf)"
-	mtuneFlag="$(grep -o "\-mtune\S*" /etc/makepkg.conf)"
-	[[ -n ${marchFlag:-} ]] && sed -i "s/$marchFlag//" /etc/makepkg.conf
-	[[ -n ${mtuneFlag:-} ]] && sed -i "s/$mtuneFlag//" /etc/makepkg.conf
-	sed -i 's/CFLAGS="/CFLAGS="-march=native /' /etc/makepkg.conf # enable safe gcc optimizations
+  marchFlag="$(grep -o "\-march\S*" /etc/makepkg.conf)"
+  mtuneFlag="$(grep -o "\-mtune\S*" /etc/makepkg.conf)"
+  [[ -n ${marchFlag:-} ]] && sed -i "s/$marchFlag//" /etc/makepkg.conf
+  [[ -n ${mtuneFlag:-} ]] && sed -i "s/$mtuneFlag//" /etc/makepkg.conf
+  sed -i 's/CFLAGS="/CFLAGS="-march=native /' /etc/makepkg.conf # enable safe gcc optimizations
 }
 
 grub_setup() {
-	local mountPoint
-	$uefi && mountPoint="/boot/EFI" || mountPoint="/boot"
-	out mkdir -p "$mountPoint"
-	out mount "$bl" "$mountPoint"
-	if $uefi; then
-		prompt "Downloading additional dependencies for GRUB with UEFI" work
-		out pacman -S --noconfirm --needed efibootmgr
+  local mountPoint
+  $uefi && mountPoint="/boot/EFI" || mountPoint="/boot"
+  out mkdir -p "$mountPoint"
+  out mount "$bl" "$mountPoint"
+  if $uefi; then
+    prompt "Downloading additional dependencies for GRUB with UEFI" work
+    out pacman -S --noconfirm --needed efibootmgr
 
-		prompt "Installing GRUB for UEFI" work
-		# https://wiki.archlinux.org/index.php/GRUB#Installation_2
-		# This currently installs it to $mountPoint/EFI/BOOT/BOOTX64.EFI (the default/fallback boot path) which might remove the Windows EFI executable there
-		out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
-	else
-		# This hasn't been tested
-		prompt "Installing GRUB for BIOS" work
-		out grub-install --target=i386-pc "$fs"
-	fi
+    prompt "Installing GRUB for UEFI" work
+    # https://wiki.archlinux.org/index.php/GRUB#Installation_2
+    # This currently installs it to $mountPoint/EFI/BOOT/BOOTX64.EFI (the default/fallback boot path) which might remove the Windows EFI executable there
+    out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
+  else
+    # This hasn't been tested
+    prompt "Installing GRUB for BIOS" work
+    out grub-install --target=i386-pc "$fs"
+  fi
 
-	prompt "Generating GRUB config" work
-	out grub-mkconfig -o /boot/grub/grub.cfg
+  prompt "Generating GRUB config" work
+  out grub-mkconfig -o /boot/grub/grub.cfg
 
-	out umount "$bl"
+  out umount "$bl"
 }
 # Sets up yay
 yay_setup() {
-	prompt "Installing yay" work
-	out cd /home/"$uName"/
-	out su -c \"git clone https://aur.archlinux.org/yay.git\" "$uName"
-	out cd yay
-	out su -c \"makepkg -s\" "$uName"
-	out pacman -U --needed --noconfirm -- *.zst
-	cd ..
-	rm -rf yay/
-	cd /
+  prompt "Installing yay" work
+  out cd /home/"$uName"/
+  out su -c \"git clone https://aur.archlinux.org/yay.git\" "$uName"
+  out cd yay
+  out su -c \"makepkg -s\" "$uName"
+  out pacman -U --needed --noconfirm -- *.zst
+  cd ..
+  rm -rf yay/
+  cd /
 }
 
 main() {
-	# /info is written by the install script
-	# shellcheck disable=SC1091
-	source /info
-	source /sharedfuncs
-	# Shred file since it contains sensative info
-	shred -n25 -u /info
+  # /info is written by the install script
+  # shellcheck disable=SC1091
+  source /info
+  source /sharedfuncs
+  # Shred file since it contains sensative info
+  shred -n25 -u /info
 
-	user_setup
-	system_setup
-	# This modifies the grub config, so we'll run this before configuring grub
-	[[ -n $enableHibernation ]] && hibernation_setup
-	grub_setup
+  user_setup
+  system_setup
+  # This modifies the grub config, so we'll run this before configuring grub
+  [[ -n $enableHibernation ]] && hibernation_setup
+  grub_setup
 
-	# Doing this before installaing yay might make the installation faster
-	[[ -n $makepkgParallel ]] && makepkg_parallel
+  # Doing this before installaing yay might make the installation faster
+  [[ -n $makepkgParallel ]] && makepkg_parallel
 
-	[[ -n $installYAY ]] && yay_setup
-	[[ -n $enableSSDTRIM ]] && trim_setup
+  [[ -n $installYAY ]] && yay_setup
+  [[ -n $enableSSDTRIM ]] && trim_setup
 
-	# Move files to $HOME
-	mv "$logFile" /home/"$uName"/
-	[[ -n $debug ]] && mv "$variableLog" /home/"$uName"/
+  # Move files to $HOME
+  mv "$logFile" /home/"$uName"/
+  [[ -n $debug ]] && mv "$variableLog" /home/"$uName"/
 
-	prompt "Log files have been dropped in $HOME" green
+  prompt "Log files have been dropped in $HOME" green
 }
 
 main "$@"

@@ -17,39 +17,39 @@ wht="\e[97m" # white
 # 2: messageType (green, work, error, question, note, command)
 # 3: set to disable echoing of newline
 prompt() {
-	case $2 in
-	green) m="$grn$1!" ;;
-	work) m="${wht}[$ylw${bnk}O$rst$wht] $ylw$1..." ;;
-	error) m="$red$1!" ;;
-	question) m="$blu$1" ;;
-	note) m="${wht}[$cyn$1$wht]" ;;
-	command) m="${mgt}Executing: $wht$1" ;;
-	esac
-	if [[ -n ${3:-} ]]; then
-		echo -en "$m$rst"
-	else
-		echo -e "$m$rst"
-	fi
+  case $2 in
+  green) m="$grn$1!" ;;
+  work) m="${wht}[$ylw${bnk}O$rst$wht] $ylw$1..." ;;
+  error) m="$red$1!" ;;
+  question) m="$blu$1" ;;
+  note) m="${wht}[$cyn$1$wht]" ;;
+  command) m="${mgt}Executing: $wht$1" ;;
+  esac
+  if [[ -n ${3:-} ]]; then
+    echo -en "$m$rst"
+  else
+    echo -e "$m$rst"
+  fi
 }
 
 # shellcheck disable=SC2154
 # out handles running commands and redirecting the output
 out() {
-	[[ -n ${show:-} ]] && prompt "$*" command
-	echo "COMMAND: $*" >>"$logFile"
-	if [[ -n ${verbose:-} ]]; then
-		eval "$*" 2>&1 | tee -a "$logFile"
-	else
-		eval "$*" >>"$logFile" 2>&1
-	fi
+  [[ -n ${show:-} ]] && prompt "$*" command
+  echo "COMMAND: $*" >>"$logFile"
+  if [[ -n ${verbose:-} ]]; then
+    eval "$*" 2>&1 | tee -a "$logFile"
+  else
+    eval "$*" >>"$logFile" 2>&1
+  fi
 }
 
 # shellcheck disable=SC2154
 # log_variable logs the contents of a variable to the variableLog if the debug flag is set
 # 1: name of variable
 log_variable() {
-	if [[ -n ${debug:-} ]]; then
-		printf "======= %s =======\n%s\n" "$1" "${!1}" >>"$variableLog"
-	fi
+  if [[ -n ${debug:-} ]]; then
+    printf "======= %s =======\n%s\n" "$1" "${!1}" >>"$variableLog"
+  fi
 }
 
