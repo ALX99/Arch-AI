@@ -1,7 +1,7 @@
 #!/bin/bash
 # NOTE: Lowercase variables will be exported to a file
 
-set -xeuo pipefail
+set -euo pipefail
 
 # The below files will be forcefully removed when starting this script.
 logFile="Arch-AI.log"
@@ -20,7 +20,7 @@ usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 
 Flags:
     -h, --help    show this help text
-    -d, --debug   enable debugging mode (enables -s) and logs variables to $variableLog
+    -d, --debug   enable debugging mode (enables -s and -v) and logs variables to $variableLog
     -s, --show    enable showing which commands are run
     -v, --verbose enable showing the output of the commands (also enables -s)"
 
@@ -36,6 +36,7 @@ read_arguments() {
       ;;
     -d | --debug)
       debug=true
+      verbose=true
       show=true
       ;;
     -h | --help)
