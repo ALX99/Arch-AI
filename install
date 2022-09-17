@@ -22,8 +22,7 @@ usage="./$(basename "$0") [<flags>] -- Automatic Arch Linux install script
 
 Flags:
     -h, --help    show this help text
-    -d, --debug   enable debugging mode (enables -l, -s) and logs variables to $variableLog
-    -l, --logging enable logging of all commands
+    -d, --debug   enable debugging mode (enables -s) and logs variables to $variableLog
     -s, --show    enable showing which commands are run
     -v, --verbose enable showing the output of the commands (also enables -s)"
 
@@ -34,14 +33,10 @@ read_arguments() {
 			show=true
 			verbose=true
 			;;
-		-l | --logging)
-			logging=true
-			;;
 		-s | --show)
 			show=true
 			;;
 		-d | --debug)
-			logging=true
 			debug=true
 			show=true
 			;;
@@ -413,10 +408,9 @@ jumpChroot() {
 	chmod 554 /mnt/setup
 
 	# Move files to the new arch installation
-	if [[ -n ${logging:-} ]]; then
-		mv "$logFile" /mnt/
-		logFile="/$logFile"
-	fi
+	mv "$logFile" /mnt/
+	logFile="/$logFile"
+
 	if [[ -n ${debug:-} ]]; then
 		mv "$variableLog" /mnt/
 		variableLog="/$variableLog"

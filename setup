@@ -138,9 +138,7 @@ main() {
 	[[ -n $enableSSDTRIM ]] && trim_setup
 
 	# Move files to $HOME
-	if [[ -n $logging ]]; then
-		mv "$logFile" /home/"$uName"/
-	fi
+	mv "$logFile" /home/"$uName"/
 	[[ -n $debug ]] && mv "$variableLog" /home/"$uName"/
 
 	prompt "Log files have been dropped in $HOME" green
