@@ -36,11 +36,11 @@ prompt() {
 # out handles running commands and redirecting the output
 out() {
   [[ -z ${silent:-} ]] && prompt "$*" command
-  echo "COMMAND: $*" >>"$logFile"
+  echo "COMMAND: $*" >>"$AI_LOG_FILE"
   if [[ -n ${verbose:-} ]]; then
-    eval "$*" 2>&1 | tee -a "$logFile"
+    eval "$*" 2>&1 | tee -a "$AI_LOG_FILE"
   else
-    eval "$*" >>"$logFile" 2>&1
+    eval "$*" >>"$AI_LOG_FILE" 2>&1
   fi
 }
 
