@@ -229,40 +229,33 @@ get_drive() {
     exit 1
   fi
 
-  while ! [[ ${RootSize:-} =~ $re ]]; do
-    iprompt "How big should the root partition be [GB]:"
-    RootSize="$Reply"
-  done
-
   while ! [[ ${SwapSize:-} =~ $re ]]; do
     iprompt "How big should the swap partition be [GB]:"
     SwapSize="$Reply"
   done
 
-  while ! [[ ${HomeSize:-} =~ $re ]]; do
+  while ! [[ ${RootSize:-} =~ $re ]]; do
     prompt "Type 0 to fill the remaining space on the disk selected" note
-    iprompt "Type out the size of the home partition [GB]:"
-    HomeSize="$Reply"
+    iprompt "How big should the root partition be [GB]:"
+    RootSize="$Reply"
   done
 
   # Set formatting of the variables
   # so that fdisk can use them
-  RootSize="+${RootSize}G"
   SwapSize="+${SwapSize}G"
-  [[ $HomeSize != 0 ]] && HomeSize="+${HomeSize}G"
+  [[ $RootSize != 0 ]] && RootSize="+${RootSize}G"
 
   # Setup paths to the different
   # partitions on the hard drive
   bl="${fs}"1
   swap="${fs}"2
   root="${fs}"3
-  home="${fs}"4
 }
 
 verify() {
   printf "Username: %s\nHostname: %s\nLocale: %s\n\n" "$uName" "$hostname" "$locale"
-  printf "Installation drive: %s\nHome partition: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" \
-    "$fs" "$HomeSize" "$RootSize" "$SwapSize" "$uefi"
+  printf "Installation drive: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" \
+    "$fs" "$RootSize" "$SwapSize" "$uefi"
   printf "Packages: %s\n" "${Pacstrap[*]}"
   read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] &&
     prompt "Installation cancelled" error && exit
@@ -273,7 +266,7 @@ set_ntp() {
   out timedatectl set-ntp true # Enable Network Time Protocol (NTP) synchronization
 }
 
-# 1=bootloader, 2=swap, 3=root, 4=home
+# 1=bootloader, 2=swap, 3=root
 format_fs() {
   while swapon --show | grep -q "$fs"; do
     prompt "$fs seems to have swap partition, trying to disable it" error
@@ -311,18 +304,12 @@ format_fs() {
     echo 2
     echo 19
 
-    mkpart "$RootSize"
+    # Either fill the rest of the drive, or the chosen amount
+    ([[ $RootSize -eq 0 ]] && mkpart) || mkpart "$RootSize"
     # Set partition type to 'Linux root (x86-64)'
     echo t
     echo 3
     echo 24
-
-    # Either fill the rest of the drive, or the chosen amount
-    ([[ $HomeSize -eq 0 ]] && mkpart) || mkpart "$HomeSize"
-    # Set partition type to 'Linux home'
-    echo t
-    echo 4
-    echo 28 # Linux home
     echo w
   ) | out fdisk "$fs"
 
@@ -331,19 +318,15 @@ format_fs() {
   out mkswap -L SWAP_PARTITION "$swap"
   out swapon "$swap"
   out mkfs.ext4 -F "$root"
-  out mkfs.ext4 -F "$home"
 
   prompt "Setting partition labels" work
   out e2label "$root" ROOT_PARTITION
-  out e2label "$home" HOME_PARTITION
 
   prompt "Enabling fast_commit on ext4 filesystems" work
   out tune2fs -O fast_commit "$root"
-  out tune2fs -O fast_commit "$home"
 
-  prompt "Mounting $root and ${home}" work
+  prompt "Mounting $root" work
   out mount "$root" /mnt
-  out mount --mkdir "$home" /mnt/home
 }
 
 # sequence for creating a new partition

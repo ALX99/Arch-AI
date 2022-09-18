@@ -9,10 +9,10 @@ user_setup() {
   prompt "Setting up the user $uName" work
   out useradd -m -G wheel "$uName"
   sed -i "/%wheel ALL=(ALL:ALL) ALL/s/^#//g" /etc/sudoers
-  echo "$uName:$userPass" \| chpasswd
+  echo "$uName:$userPass" | chpasswd
 
   prompt "Setting up the root password" work
-  echo "root:$rootPW" \| chpasswd
+  echo "root:$rootPW" | chpasswd
 }
 
 system_setup() {
