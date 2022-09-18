@@ -76,25 +76,45 @@ makepkg_parallel() {
   sed -i 's/CFLAGS="/CFLAGS="-march=native /' /etc/makepkg.conf # enable safe gcc optimizations
 }
 
-grub_setup() {
-  local mountPoint
-  mountPoint="/boot/EFI"
-  out mkdir -p "$mountPoint"
-  out mount "$bl" "$mountPoint"
+bl_setup() {
+  local mountPoint="/boot"
 
-  prompt "Downloading additional dependencies for GRUB with UEFI" work
-  out pacman -S --noconfirm --needed efibootmgr
+  # Legacy grub, kept in case systemd-boot ever breaks
+  if false; then
+    prompt "Downloading additional dependencies for GRUB with UEFI" work
+    out pacman -S --noconfirm --needed efibootmgr
 
-  prompt "Installing GRUB for UEFI" work
-  # https://wiki.archlinux.org/index.php/GRUB#Installation_2
-  # This currently installs it to $mountPoint/EFI/BOOT/BOOTX64.EFI (the default/fallback boot path) which might remove the Windows EFI executable there
-  out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
+    prompt "Installing GRUB for UEFI" work
+    # https://wiki.archlinux.org/index.php/GRUB#Installation_2
+    # The --removeable flag will make GRUB write its EFI image to $mountPoint/EFI/BOOT/BOOTX64.efi
+    # which the boot firmware will be able to find without any UEFI boot entry.
+    # (Windiws usually places its EFI image there which will get overwritten)
+    out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
 
-  prompt "Generating GRUB config" work
-  out grub-mkconfig -o /boot/grub/grub.cfg
+    prompt "Generating GRUB config" work
+    out grub-mkconfig -o /boot/grub/grub.cfg
+  else
+    out bootctl install
+    # man loader.conf
+    echo "default arch.conf
+timeout 4
+console-mode max
+editor no" >$mountPoint/loader/loader.conf
 
-  out umount "$bl"
+    # https://systemd.io/BOOT_LOADER_SPECIFICATION/#type-1-boot-loader-specification-entries
+    echo 'title Arch Linux
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+options root="LABEL=ROOT_PARTITION" rw' >$mountPoint/loader/entries/arch.conf
+
+    echo 'title Arch Linux (fallback initramfs)
+linux   /vmlinuz-linux
+initrd  /initramfs-linux-fallback.img
+options root="LABEL=ROOT_PARTITION" rw' >$mountPoint/loader/entries/arch-fallback.conf
+
+  fi
 }
+
 # Sets up yay
 yay_setup() {
   prompt "Installing yay" work
@@ -118,15 +138,15 @@ main() {
 
   user_setup
   system_setup
-  # This modifies the grub config, so we'll run this before configuring grub
-  [[ -n $enableHibernation ]] && hibernation_setup
-  grub_setup
+  # todo
+  [[ -n ${enableHibernation:-} ]] && hibernation_setup
+  bl_setup
 
   # Doing this before installaing yay might make the installation faster
-  [[ -n $makepkgParallel ]] && makepkg_parallel
+  [[ -n ${makepkgParallel:-} ]] && makepkg_parallel
 
-  [[ -n $installYAY ]] && yay_setup
-  [[ -n $enableSSDTRIM ]] && trim_setup
+  [[ -n ${installYAY:-} ]] && yay_setup
+  [[ -n ${enableSSDTRIM:-} ]] && trim_setup
 
   # Move files to $HOME
   mv "$logFile" /home/"$uName"/

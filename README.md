@@ -29,7 +29,7 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - Ext4 fast_commit enabled
 - CPU detection + microcode installation
 - GPU detection + installation
-- GRUB installation
+- Systemd-boot installation
 - yay installation
 - Option to install packages
 - Option to auto-trim mounted SSDs once a week
@@ -47,7 +47,6 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - xorg-server
 - xorg-xinit
 - xorg-xrandr
-- grub
 - networkmanager
 - git (required to install yay)
 - go (required by yay)

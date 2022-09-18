@@ -9,7 +9,7 @@ logFile="Arch-AI.log"
 # Packages that will be installed on the system with pacstrap
 # the only things you are allowed to remove here would be git
 # removing other things might break the setup procedure
-Pacstrap=(linux linux-firmware base base-devel grub networkmanager git go)
+Pacstrap=(linux linux-firmware base base-devel networkmanager git go)
 # Required packages to run this script
 Reqs=(dosfstools fzf arch-install-scripts)
 
@@ -317,6 +317,9 @@ format_fs() {
 
   prompt "Mounting $root" work
   out mount "$root" /mnt
+
+  prompt "Mounting $bl" work
+  out mount --mkdir "$bl" /mnt/boot
 }
 
 # sequence for creating a new partition
