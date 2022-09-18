@@ -264,10 +264,10 @@ set_ntp() {
 }
 
 # 1=bootloader, 2=swap, 3=root
-format_fs() {
+setup_fs() {
   while swapon --show | grep -q "$fs"; do
     prompt "$fs seems to have swap partition, trying to disable it" error
-    swapoff "$(swapon --show | grep "$fs" | awk '{ print $1}')"
+    swapoff "$(swapon --show | grep "$fs" | awk '{print $1}')"
   done
 
   while df | grep -q "$fs"; do
@@ -334,11 +334,16 @@ mkpart() {
 arch_install() {
   prompt "The script will now install and set up your system" green
   prompt "No further input will be needed" green
-  sleep 2
+
   prompt "Pacstrapping packages" work
   pacstrap /mnt "${Pacstrap[@]}"
+
+  out umount /mnt/boot # We don't want this in the fstab
+
   prompt "Generating the fstab" work
   genfstab -U /mnt >/mnt/etc/fstab
+
+  out mount --mkdir "$bl" /mnt/boot
 }
 
 # chroot into the new arch installation
@@ -396,6 +401,7 @@ main() {
   rm -f "$logFile"
   read_arguments "$@"
   system_check
+  set_ntp
   installReqs
   get_config
   get_micro
@@ -403,8 +409,7 @@ main() {
   get_pkgs
   get_drive
   verify
-  set_ntp
-  format_fs
+  setup_fs
   arch_install
   jumpChroot
   prompt "Arch Linux successfully installed" green

@@ -139,7 +139,7 @@ main() {
   user_setup
   system_setup
   # todo
-  [[ -n ${enableHibernation:-} ]] && hibernation_setup
+  # [[ -n ${enableHibernation:-} ]] && hibernation_setup
   bl_setup
 
   # Doing this before installaing yay might make the installation faster
