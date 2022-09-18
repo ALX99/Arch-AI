@@ -78,22 +78,17 @@ makepkg_parallel() {
 
 grub_setup() {
   local mountPoint
-  $uefi && mountPoint="/boot/EFI" || mountPoint="/boot"
+  mountPoint="/boot/EFI"
   out mkdir -p "$mountPoint"
   out mount "$bl" "$mountPoint"
-  if $uefi; then
-    prompt "Downloading additional dependencies for GRUB with UEFI" work
-    out pacman -S --noconfirm --needed efibootmgr
 
-    prompt "Installing GRUB for UEFI" work
-    # https://wiki.archlinux.org/index.php/GRUB#Installation_2
-    # This currently installs it to $mountPoint/EFI/BOOT/BOOTX64.EFI (the default/fallback boot path) which might remove the Windows EFI executable there
-    out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
-  else
-    # This hasn't been tested
-    prompt "Installing GRUB for BIOS" work
-    out grub-install --target=i386-pc "$fs"
-  fi
+  prompt "Downloading additional dependencies for GRUB with UEFI" work
+  out pacman -S --noconfirm --needed efibootmgr
+
+  prompt "Installing GRUB for UEFI" work
+  # https://wiki.archlinux.org/index.php/GRUB#Installation_2
+  # This currently installs it to $mountPoint/EFI/BOOT/BOOTX64.EFI (the default/fallback boot path) which might remove the Windows EFI executable there
+  out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
 
   prompt "Generating GRUB config" work
   out grub-mkconfig -o /boot/grub/grub.cfg

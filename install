@@ -55,12 +55,9 @@ system_check() {
     exit 1
 
   prompt "Checking for UEFI" work
-  if ls /sys/firmware/efi/efivars/ &>/dev/null; then
-    uefi=true
-    prompt "Found UEFI" green
-  else
-    uefi=false
-    prompt "Did not find UEFI" green
+  if ! ls /sys/firmware/efi/efivars/ &>/dev/null; then
+    prompt "Arch not booted into UEFI mode" error
+    exit 1
   fi
 
   prompt "Identifying GPU drivers" work
@@ -254,8 +251,8 @@ get_drive() {
 
 verify() {
   printf "Username: %s\nHostname: %s\nLocale: %s\n\n" "$uName" "$hostname" "$locale"
-  printf "Installation drive: %s\nRoot partition: %s\nSwap partition: %s\nUEFI enabled: %s\n\n" \
-    "$fs" "$RootSize" "$SwapSize" "$uefi"
+  printf "Installation drive: %s\nRoot partition: %s\nSwap partition: %s\n\n" \
+    "$fs" "$RootSize" "$SwapSize"
   printf "Packages: %s\n" "${Pacstrap[*]}"
   read -rn 1 -p "Continue with install? (y/N)" && [[ ! $REPLY =~ ^[Yy]$ ]] &&
     prompt "Installation cancelled" error && exit
@@ -286,17 +283,10 @@ format_fs() {
     # GPT > MBR
     echo g
 
-    if $uefi; then
-      mkpart "+512M"
-      # Set partition type to 'EFI System'
-      echo t
-      echo 1
-    else
-      mkpart "+200M"
-      # Set partition type to 'BIOS boot'
-      echo t
-      echo 4
-    fi
+    mkpart "+512M"
+    # Set partition type to 'EFI System'
+    echo t
+    echo 1
 
     mkpart "$SwapSize"
     # Set partition type to 'Linux Swap'
