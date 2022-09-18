@@ -114,7 +114,7 @@ installReqs() {
     prompt "Installing reflector" work
     out pacman -S reflector --needed --noconfirm
     prompt "Generating new pacman mirrors, please be patient" work
-    reflector --verbose --latest 100 --sort rate --save /etc/pacman.d/mirrorlist
+    reflector --verbose --latest 15 --sort rate --save /etc/pacman.d/mirrorlist
   fi
 
   prompt "Installing additional packages if required" work
