@@ -48,24 +48,23 @@ read_arguments() {
 # Obtain information about the system
 # the script is running on
 system_check() {
-  local gpus gpu
+  local gpu
 
-  [ $EUID -ne 0 ] &&
+  [ "$EUID" -ne 0 ] &&
     prompt "This script must be run as root" error &&
     exit 1
 
   prompt "Checking for UEFI" work
-  if ! ls /sys/firmware/efi/efivars/ &>/dev/null; then
+  if [ ! -r /sys/firmware/efi/fw_platform_size ]; then
     prompt "Arch not booted into UEFI mode" error
     exit 1
   fi
 
   prompt "Identifying GPU drivers" work
-  gpus=$(lspci | grep -e VGA -e 3D | tr '[:upper:]' '[:lower:]')
 
   # https://wiki.archlinux.org/index.php/Xorg#Installation
   # https://wiki.archlinux.org/index.php/Hardware_video_acceleration
-  for gpu in $gpus; do
+  while read -r gpu; do
     case "$gpu" in
     # https://wiki.archlinux.org/index.php/Intel_graphics
     *"intel"*)
@@ -99,7 +98,7 @@ system_check() {
       add_pkg mesa-vdpau
       ;;
     esac
-  done
+  done < <(lspci | grep -e VGA -e 3D | tr '[:upper:]' '[:lower:]')
 }
 
 # Installs missing requirements for this script (if any)
