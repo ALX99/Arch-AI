@@ -84,6 +84,7 @@ makepkg_parallel() {
 
 bl_setup() {
   out bootctl install
+  out systemctl enable systemd-boot-update
 
   # man loader.conf
   echo "default arch.conf
