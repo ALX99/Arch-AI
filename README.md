@@ -29,7 +29,8 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - Ext4 fast_commit enabled
 - CPU detection + microcode installation
 - GPU detection + installation
-- Systemd-boot installation
+- [Systemd-boot installation](https://wiki.archlinux.org/title/systemd-boot)
+- [Hibernation setup](https://wiki.archlinux.org/title/Power_management/Suspend_and_hibernate)
 - yay installation
 - Option to install packages
 - Option to auto-trim mounted SSDs once a week

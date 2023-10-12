@@ -47,15 +47,16 @@ trim_setup() {
   out systemctl enable fstrim.timer
 }
 
-# todo not working
 hibernation_setup() {
   local swapUUID
-  prompt "Modifying kernel parameters to allow for hibernation" work
   swapUUID=$(blkid -s UUID -o value "$AI_SWAP_PART")
 
-  # Modify kernel parameters and initramfs hooks
-  sed -i "/GRUB_CMDLINE_LINUX=/c\GRUB_CMDLINE_LINUX=\"resume=UUID=$swapUUID\"" /etc/default/grub &&
-    sed -i "s/\<keyboard\>/& resume/" /etc/mkinitcpio.conf # Add the resume hook after the keyboard hook
+  prompt "Adding mkinitcpio resume hook" work
+  sed "/^[^#]/ s/\<filesystems\>/& resume/" /etc/mkinitcpio.conf # Add the resume hook after the filesystems mkinitcpio hook
+
+  prompt "Modifying kernel parameters to allow for hibernation" work
+  printf "resume=UUID=%s" "$swapUUID" >/boot/loader/entries/arch.conf
+  printf "resume=UUID=%s" "$swapUUID" >/boot/loader/entries/arch-fallback.conf
 
   prompt "Regenerating the initramfs" work
   out mkinitcpio -p linux
@@ -82,42 +83,24 @@ makepkg_parallel() {
 }
 
 bl_setup() {
-  local mountPoint="/boot"
+  out bootctl install
 
-  # Legacy grub, kept in case systemd-boot ever breaks
-  if false; then
-    prompt "Downloading additional dependencies for GRUB with UEFI" work
-    out pacman -S --noconfirm --needed efibootmgr
-
-    prompt "Installing GRUB for UEFI" work
-    # https://wiki.archlinux.org/index.php/GRUB#Installation_2
-    # The --removeable flag will make GRUB write its EFI image to $mountPoint/EFI/BOOT/BOOTX64.efi
-    # which the boot firmware will be able to find without any UEFI boot entry.
-    # (Windiws usually places its EFI image there which will get overwritten)
-    out grub-install --target=x86_64-efi --bootloader-id=GRUB --efi-directory="$mountPoint" --removable
-
-    prompt "Generating GRUB config" work
-    out grub-mkconfig -o /boot/grub/grub.cfg
-  else
-    out bootctl install
-    # man loader.conf
-    echo "default arch.conf
+  # man loader.conf
+  echo "default arch.conf
 timeout 4
 console-mode max
-editor no" >$mountPoint/loader/loader.conf
+editor no" >/boot/loader/loader.conf
 
-    # https://systemd.io/BOOT_LOADER_SPECIFICATION/#type-1-boot-loader-specification-entries
-    echo 'title Arch Linux
+  # https://uapi-group.org/specifications/specs/boot_loader_specification/#type-1-boot-loader-specification-entries
+  echo 'title Arch Linux
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
-options root="LABEL=ROOT_PARTITION" rw' >$mountPoint/loader/entries/arch.conf
+options root="LABEL=ROOT_PARTITION" rw' >/boot/loader/entries/arch.conf
 
-    echo 'title Arch Linux (fallback initramfs)
+  echo 'title Arch Linux (fallback initramfs)
 linux   /vmlinuz-linux
 initrd  /initramfs-linux-fallback.img
-options root="LABEL=ROOT_PARTITION" rw' >$mountPoint/loader/entries/arch-fallback.conf
-
-  fi
+options root="LABEL=ROOT_PARTITION" rw' >/boot/loader/entries/arch-fallback.conf
 }
 
 # Sets up yay
@@ -143,9 +126,8 @@ main() {
 
   user_setup
   system_setup
-  # todo
-  # [[ -n ${AI_OPT_HIBERNATION:-} ]] && hibernation_setup
   bl_setup
+  [[ -n ${AI_OPT_HIBERNATION:-} ]] && hibernation_setup
 
   # Doing this before installaing yay might make the installation faster
   [[ -n ${AI_OPT_MAKEPKG:-} ]] && makepkg_parallel
