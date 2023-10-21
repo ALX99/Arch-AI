@@ -15,7 +15,7 @@ curl -L cutt.ly/Arch | bash
 ## Why
 
 I do realize there exists several other popular automatic Arch Linux install scripts out there but most of them appear unnecessarily complex and seem annoying to use to me.  
-This automatic installation script focuses primarily on user-friendliness. It will set up and install sensible packages without asking you such as Network Manager, sudo and git.  
+This automatic installation script focuses primarily on user-friendliness. It will set up and install sensible packages without asking you such as Network Manager and git.  
 
 The script will primarily focus on core OS features many people use, things such as manually specifying different partitions _might_ never be supported.
 
@@ -24,7 +24,8 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 ## Features
 
 - Automatic drive formatting
-- User account & hostname & sudo setup
+- User account & hostname setup
+- Add user to the `wheel` group
 - Timezone + clock setup
 - Ext4 fast_commit enabled
 - CPU detection + microcode installation
@@ -69,8 +70,3 @@ Furthermore, all the user interaction is done at the beginning, so after answeri
 - [NVIDIA DRM kernel modesetting](https://wiki.archlinux.org/index.php/NVIDIA#DRM_kernel_mode_setting)
 - AMDGPU SI & CIK detection & module paramaters & kernel paramaters
 - HP computer detection on UEFI boot & prompt user that they need to change the "customized boot" option the UEFI
-
-### Scratched
-
-- Sudo configuration settings
-  - Your user will be added to the wheels group which will have sudo access, which is enough for most people

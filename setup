@@ -7,8 +7,8 @@ set -euo pipefail
 
 user_setup() {
   prompt "Setting up the user $AI_USER" work
+  # https://wiki.archlinux.org/title/users_and_groups
   out useradd -m -G wheel "$AI_USER"
-  sed -i "/%wheel ALL=(ALL:ALL) ALL/s/^#//g" /etc/sudoers
   echo "$AI_USER:$AI_PASS" | chpasswd
 
   prompt "Setting up the root password" work
