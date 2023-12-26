@@ -9,7 +9,7 @@ AI_LOG_FILE="Arch-AI.log"
 # Packages that will be installed on the system with pacstrap
 # the only things you are allowed to remove here would be git
 # removing other things might break the setup procedure
-pacstrap_pkgs=(linux linux-firmware base base-devel networkmanager git go)
+pacstrap_pkgs=(linux linux-firmware base base-devel iwd git go)
 # Required packages to run this script
 Reqs=(dosfstools fzf arch-install-scripts)
 

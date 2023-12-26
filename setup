@@ -18,10 +18,15 @@ user_setup() {
 system_setup() {
   local timeZ
   prompt "Setting up the system" work
-  out systemctl enable NetworkManager
-  # https://wiki.archlinux.org/title/systemd-timesyncd
-  out systemctl enable systemd-timesyncd
 
+  # https://wiki.archlinux.org/title/systemd-timesyncd
+  # https://wiki.archlinux.org/title/systemd-resolved
+  # https://wiki.archlinux.org/title/iwd
+  out systemctl enable systemd-timesyncd systemd-resolved iwd
+  out ln -sf ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+
+  echo "[General]
+EnableNetworkConfiguration=true" >/etc/iwd/main.conf
   # Set up the timezone and clock
   prompt "Setting up the timezone" work
   timeZ="$(curl -s "http://worldtimeapi.org/api/ip.txt" | awk '/timezone/{print $2}')"
