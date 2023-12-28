@@ -6,6 +6,7 @@ set -euo pipefail
 # The below files will be forcefully removed when starting this script.
 AI_LOG_FILE="Arch-AI.log"
 
+# base linux linux-firmware (maybe sof-firmware and polkit also for wayland shit?)
 # Packages that will be installed on the system with pacstrap
 # the only things you are allowed to remove here would be git
 # removing other things might break the setup procedure
@@ -302,7 +303,7 @@ setup_fs() {
     # Set partition type to 'Linux root (x86-64)'
     echo t
     echo 3
-    echo 24
+    echo 23
     echo w
   ) | out fdisk "$fs"
 
@@ -341,6 +342,7 @@ arch_install() {
   prompt "pacstrap_pkgsping packages" work
   pacstrap /mnt "${pacstrap_pkgs[@]}"
 
+  # not in guide
   out umount /mnt/boot # We don't want this in the fstab
 
   prompt "Generating the fstab" work
