@@ -37,7 +37,7 @@ EnableNetworkConfiguration=true" >/etc/iwd/main.conf
   prompt "Setting up the locale: $AI_LOCALE" work
   out sed -i "/$AI_LOCALE/s/^#//g" /etc/locale.gen
   out locale-gen
-  echo -e "LANG=$AI_LOCALE\nLANGUAGE=$AI_LOCALE\nLC_ALL=$AI_LOCALE" >/etc/locale.conf
+  echo -e "LANG=$AI_LOCALE\nLANGUAGE=$AI_LOCALE" >/etc/locale.conf
 
   # Setup hostname
   prompt "Setting up the hostname: $AI_HOSTNAME" work
