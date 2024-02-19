@@ -129,24 +129,22 @@ get_config() {
   done
 
   while true; do
-    iprompt "What hostname would you like:"
-    AI_HOSTNAME="$Reply"
-    iprompt "What username would you like:"
-    AI_USER="$Reply"
+    prompt "What hostname would you like: " question true
+    read -r AI_HOSTNAME
+    prompt "What username would you like: " question true
+    read -r AI_USER
     [[ -n ${AI_USER:-} && -n ${AI_HOSTNAME:-} ]] && break
     prompt "Username or hostname was left blank, try again" error
   done
 
   # Get user password
-  iprompt "What password would you like for ${AI_USER}:" silent
-  # shellcheck disable=SC2034
-  AI_PASS="$Reply"
+  prompt "What password would you like for ${AI_USER}: " question true
+  read -rs AI_PASS
   echo
 
   # Get root password
-  iprompt "What password would you like for the root user:" silent
-  # shellcheck disable=SC2034
-  AI_ROOT_PASS="$Reply"
+  prompt "What password would you like for the root user: " question true
+  read -rs AI_ROOT_PASS
   echo
 }
 
@@ -220,8 +218,8 @@ get_drive() {
 
   echo "$drives" | awk '{print NR,$0}'
   while ! [[ ${choice:-} =~ $re ]] || [[ ${choice:-} -le 0 || ${choice:-} -gt $numDrives ]]; do
-    iprompt "Which drive would you like to install Arch on [1-$numDrives]: "
-    choice="$Reply"
+    prompt "Which drive would you like to install Arch on [1-$numDrives]: " question true
+    read -r choice
   done
 
   # fs contains the base path to the drive
@@ -234,14 +232,14 @@ get_drive() {
   fi
 
   while ! [[ ${swapSize:-} =~ $re ]]; do
-    iprompt "How big should the swap partition be [GB]:"
-    swapSize="$Reply"
+    prompt "How big should the swap partition be [GB]: " question true
+    read -r swapSize
   done
 
   while ! [[ ${rootSize:-} =~ $re ]]; do
     prompt "Type 0 to fill the remaining space on the disk selected" note
-    iprompt "How big should the root partition be [GB]:"
-    rootSize="$Reply"
+    prompt "How big should the root partition be [GB]: " question true
+    read -r rootSize
   done
 
   # Set formatting of the variables
@@ -379,18 +377,6 @@ jumpChroot() {
 rm setup
 rm sharedfuncs
 EOF
-}
-
-# Interactive prompt, reads the reply to the $Reply variable
-# 1: message
-# 2: set to enable silent mode
-iprompt() {
-  prompt "$1 " question true
-  if [[ -n ${2:-} ]]; then
-    read -rs Reply
-  else
-    read -r Reply
-  fi
 }
 
 # Y/n prompt, returns 0 if answer is anything except n or N
