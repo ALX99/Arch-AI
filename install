@@ -174,15 +174,22 @@ get_micro() {
 # https://wiki.archlinux.org/index.php/Solid_state_drive#TRIM
 # shellcheck disable=SC2034
 get_misc() {
-  Ynprompt "Would you like to install yay?" && AI_OPT_YAY=true
-  Ynprompt "Would you like to auto-trim your mounted SSDs once a week?" &&
-    AI_OPT_SSD_TRIM=true && add_pkg util-linux
+  if Ynprompt "Would you like to install yay?"; then
+    AI_OPT_YAY=true
+  fi
 
-  Ynprompt "Would you like to enable kernel parameters to allow for hibernation?" &&
+  if Ynprompt "Would you like to auto-trim your mounted SSDs once a week?"; then
+    AI_OPT_SSD_TRIM=true
+    add_pkg util-linux
+  fi
+
+  if Ynprompt "Would you like to enable kernel parameters to allow for hibernation?"; then
     AI_OPT_HIBERNATION=true
+  fi
 
-  Ynprompt "Would you like to enable parallel and optimized compilation&compression for makepkg?" &&
+  if Ynprompt "Would you like to enable parallel and optimized compilation&compression for makepkg?"; then
     AI_OPT_MAKEPKG=true
+  fi
 }
 
 # Ask for some additional popular packages
@@ -421,4 +428,3 @@ main() {
 }
 
 main "$@"
-
